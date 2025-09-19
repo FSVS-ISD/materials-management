@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>部門報表管理系統</title>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <style>
+      /* 以下為原有CSS保持不變 */
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      }
+
+      body {
+        background: linear-gradient(135deg, #1a2a6c, #2c3e50, #1a2a6c);
+        background-size: 400% 400%;
+        animation: gradientBG 15s ease infinite;
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 20px;
+      }
+
+      @keyframes gradientBG {
+        0% {
+          background-position: 0% 50%;
+        }
+        50% {
+          background-position: 100% 50%;
+        }
+        100% {
+          background-position: 0% 50%;
+        }
+      }
+
+      .container {
+        display: flex;
+        flex-direction: column;
+        max-width: 1200px;
+        width: 100%;
+        background: rgba(255, 255, 255, 0.12);
+        backdrop-filter: blur(10px);
+        border-radius: 20px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        overflow: hidden;
+      }
+
+      header {
+        background: rgba(0, 0, 0, 0.7);
+        color: white;
+        padding: 20px;
+        text-align: center;
+        border-bottom: 2px solid #ff6b6b;
+      }
+
+      header h1 {
+        font-size: 2.5rem;
+        margin-bottom: 10px;
+        background: linear-gradient(to right, #4facfe, #00f2fe);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .content {
+        display: flex;
+        min-height: 600px;
+      }
+
+      .login-section {
+        flex: 1;
+        padding: 40px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.5);
+      }
+
+      .users-section {
+        flex: 1;
+        padding: 30px;
+        background: rgba(255, 255, 255, 0.9);
+        overflow-y: auto;
+      }
+
+      .login-form {
+        background: rgba(255, 255, 255, 0.1);
+        padding: 30px;
+        border-radius: 15px;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        position: relative;
+      }
+
+      .form-group {
+        margin-bottom: 25px;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 8px;
+        color: #fff;
+        font-weight: 500;
+      }
+
+      input {
+        width: 100%;
+        padding: 14px;
+        border: none;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.9);
+        font-size: 16px;
+        box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.1);
+      }
+
+      button {
+        padding: 14px;
+        background: linear-gradient(to right, #4facfe, #00f2fe);
+        border: none;
+        border-radius: 8px;
+        color: white;
+        font-size: 18px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+      }
+
+      .login-btn {
+        width: 100%;
+      }
+
+      button:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 6px 15px rgba(0, 0, 0, 0.3);
+      }
+
+      .user-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 20px;
+        margin-top: 20px;
+      }
+
+      .user-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        text-align: center;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        transition: transform 0.3s ease;
+        cursor: pointer;
+        border: 2px solid transparent;
+        position: relative;
+        overflow: hidden;
+        user-select: none;
+      }
+
+      .user-card:hover {
+        transform: translateY(-5px);
+        border-color: #4facfe;
+      }
+
+      .user-card.admin {
+        border-color: #ff6b6b;
+      }
+
+      .user-card.admin:hover {
+        border-color: #ff8e8e;
+      }
+
+      .user-card i {
+        font-size: 2.5rem;
+        margin-bottom: 15px;
+      }
+
+      .user-card.admin i {
+        color: #ff6b6b;
+      }
+
+      .user-card.regular i {
+        color: #4facfe;
+      }
+
+      .user-card.query i {
+        color: #2ecc71;
+      }
+
+      .user-card h3 {
+        color: #333;
+        margin-bottom: 5px;
+      }
+
+      .user-card p {
+        color: #666;
+        font-size: 14px;
+      }
+
+      .section-title {
+        color: #333;
+        margin-bottom: 20px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid #4facfe;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .filter-container {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 15px;
+        flex-wrap: wrap;
+      }
+
+      .filter-btn {
+        padding: 8px 15px;
+        font-size: 14px;
+        background: #e0e0e0;
+        color: #333;
+        border-radius: 20px;
+        transition: all 0.3s ease;
+        cursor: pointer;
+        border: none;
+      }
+
+      .filter-btn.active,
+      .filter-btn:hover {
+        background: #4facfe;
+        color: white;
+      }
+
+      .message {
+        padding: 15px;
+        margin: 20px 0;
+        border-radius: 8px;
+        text-align: center;
+        font-weight: 500;
+        display: none;
+      }
+
+      .error {
+        background: rgba(255, 99, 71, 0.2);
+        color: #ff6347;
+        border: 1px solid #ff6347;
+      }
+
+      .success {
+        background: rgba(46, 204, 113, 0.2);
+        color: #2ecc71;
+        border: 1px solid #2ecc71;
+      }
+
+      .password-container {
+        position: relative;
+      }
+
+      .toggle-password {
+        position: absolute;
+        right: 15px;
+        top: 50%;
+        transform: translateY(-50%);
+        cursor: pointer;
+        color: #666;
+        user-select: none;
+      }
+
+      /* 管理員修改密碼區塊 */
+      #adminPanel {
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 12px;
+        padding: 20px;
+        margin-top: 20px;
+        color: white;
+      }
+
+      #adminPanel h3 {
+        margin-bottom: 15px;
+        text-align: center;
+      }
+
+      #adminPanel .form-group {
+        margin-bottom: 15px;
+      }
+
+      #adminPanel label {
+        color: white;
+      }
+
+      #adminPanel input {
+        width: 100%;
+        padding: 10px;
+        border-radius: 6px;
+        border: none;
+        font-size: 14px;
+      }
+
+      #adminPanel button {
+        width: 100%;
+        margin-top: 10px;
+        background: #28a745;
+        font-weight: 600;
+        font-size: 16px;
+        box-shadow: none;
+      }
+    </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1><i class="fas fa-chart-line"></i> 部門報表管理系統</h1>
+      <p>多層級使用者許可權管理 - 部門報表查詢</p>
+    </header>
+
+    <div class="content">
+      <div class="login-section">
+        <div class="login-form" id="loginForm">
+          <h2 style="color: white; text-align: center; margin-bottom: 25px;">
+            用戶登錄
+          </h2>
+          <div class="form-group">
+            <label for="username"><i class="fas fa-user"></i> 用戶名</label>
+            <input type="text" id="username" placeholder="輸入用戶名" autocomplete="off" />
+          </div>
+          <div class="form-group">
+            <label for="password"><i class="fas fa-lock"></i> 密碼</label>
+            <div class="password-container">
+              <input type="password" id="password" placeholder="輸入密碼" autocomplete="off" />
+              <span class="toggle-password" id="togglePassword">
+                <i class="fas fa-eye"></i>
+              </span>
+            </div>
+          </div>
+          <button class="login-btn" id="loginBtn">登 錄</button>
+
+          <div id="message" class="message"></div>
+        </div>
+
+        <!-- 管理員密碼修改區塊 -->
+        <div id="adminPanel" style="display:none;">
+          <h3>管理員密碼修改</h3>
+          <div class="form-group">
+            <label for="changeUserSelect">選擇用戶</label>
+            <select id="changeUserSelect">
+              <!-- 選項由JS生成 -->
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="newPassword">新密碼</label>
+            <input type="password" id="newPassword" placeholder="輸入新密碼" />
+          </div>
+          <button id="changePasswordBtn">修改密碼</button>
+          <button id="adminLogoutBtn" style="margin-top:10px; background:#dc3545;">登出管理員</button>
+          <div id="adminMessage" class="message"></div>
+        </div>
+      </div>
+
+      <div class="users-section">
+        <div class="section-title">
+          <h2>使用者帳戶列表</h2>
+        </div>
+
+        <div class="filter-container">
+          <button id="showAllBtn" class="filter-btn active">全部使用者</button>
+          <button id="showAdminBtn" class="filter-btn">管理員</button>
+          <button id="showUserBtn" class="filter-btn">普通用戶</button>
+          <button id="showQueryBtn" class="filter-btn">查詢帳戶</button>
+        </div>
+
+        <p>點擊使用者卡片可快速填寫用戶名；點擊普通用戶或查詢帳戶卡片直接跳轉該用戶頁面</p>
+
+        <div class="user-grid" id="userGrid">
+          <!-- 使用者卡片將通過JS動態生成 -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 使用者資料庫，新增label為部門中文名稱
+    const users = [
+      // 管理員帳戶
+      {
+        id: 0,
+        username: "dep-admin",
+        password: "admin123",
+        role: "admin",
+        page: "All-Department-report-management.html",
+      },
+      {
+        id: 20,
+        username: "admin",
+        password: "admin123",
+        role: "admin",
+        page: "manage.html",
+      },
+
+      // 普通用戶帳戶 (dep1~dep9)
+      {
+        id: 1,
+        username: "dep1",
+        password: "pass1",
+        role: "user",
+        page: "http://10.10.7.66:5000/Department1-login.html",
+        label: "商經科",
+      },
+      {
+        id: 2,
+        username: "dep2",
+        password: "pass2",
+        role: "user",
+        page: "http://10.10.7.66:5000/Department2-login.html",
+        label: "會事科",
+      },
+      {
+        id: 3,
+        username: "dep3",
+        password: "pass3",
+        role: "user",
+        page: "http://10.10.7.66:5000/Department3-login.html",
+        label: "國貿科",
+      },
+      {
+        id: 4,
+        username: "dep4",
+        password: "pass4",
+        role: "user",
+        page: "http://10.10.7.66:5000/Department4-login.html",
+        label: "觀光科",
+      },
+      {
+        id: 5,
+        username: "dep5",
+        password: "pass5",
+        role: "user",
+        page: "http://10.10.7.66:5000/Department5-login.html",
+        label: "資處科",
+      },
+      {
+        id: 6,
+        username: "dep6",
+        password: "pass6",
+        role: "user",
+        page: "http://10.10.7.66:5000/Department6-login.html",
+        label: "機械科",
+      },
+      {
+        id: 7,
+        username: "dep7",
+        password: "pass7",
+        role: "user",
+        page: "http://10.10.7.66:5000/Department7-login.html",
+        label: "電圖科",
+      },
+      {
+        id: 8,
+        username: "dep8",
+        password: "pass8",
+        role: "user",
+        page: "http://10.10.7.66:5000/Department8-login.html",
+        label: "室設科",
+      },
+      {
+        id: 9,
+        username: "dep9",
+        password: "pass9",
+        role: "user",
+        page: "http://10.10.7.66:5000/Department9-login.html",
+        label: "家設科",
+      },
+
+      // 查詢帳戶 (dep1T~dep9T)
+      {
+        id: 10,
+        username: "dep1T",
+        password: "FSVS",
+        role: "query",
+        page: "http://10.10.7.66:5000/Department1-report-management.html",
+        linkedUser: "dep1",
+        label: "商經科",
+      },
+      {
+        id: 11,
+        username: "dep2T",
+        password: "FSVS",
+        role: "query",
+        page: "http://10.10.7.66:5000/Department2-report-management.html",
+        linkedUser: "dep2",
+        label: "會事科",
+      },
+      {
+        id: 12,
+        username: "dep3T",
+        password: "FSVS",
+        role: "query",
+        page: "http://10.10.7.66:5000/Department3-report-management.html",
+        linkedUser: "dep3",
+        label: "國貿科",
+      },
+      {
+        id: 13,
+        username: "dep4T",
+        password: "FSVS",
+        role: "query",
+        page: "http://10.10.7.66:5000/Department4-report-management.html",
+        linkedUser: "dep4",
+        label: "觀光科",
+      },
+      {
+        id: 14,
+        username: "dep5T",
+        password: "FSVS",
+        role: "query",
+        page: "http://10.10.7.66:5000/Department5-report-management.html",
+        linkedUser: "dep5",
+        label: "資處科",
+      },
+      {
+        id: 15,
+        username: "dep6T",
+        password: "FSVS",
+        role: "query",
+        page: "http://10.10.7.66:5000/Department6-report-management.html",
+        linkedUser: "dep6",
+        label: "機械科",
+      },
+      {
+        id: 16,
+        username: "dep7T",
+        password: "FSVS",
+        role: "query",
+        page: "http://10.10.7.66:5000/Department7-report-management.html",
+        linkedUser: "dep7",
+        label: "電圖科",
+      },
+      {
+        id: 17,
+        username: "dep8T",
+        password: "FSVS",
+        role: "query",
+        page: "http://10.10.7.66:5000/Department8-report-management.html",
+        linkedUser: "dep8",
+        label: "室設科",
+      },
+      {
+        id: 18,
+        username: "dep9T",
+        password: "FSVS",
+        role: "query",
+        page: "http://10.10.7.66:5000/Department9-report-management.html",
+        linkedUser: "dep9",
+        label: "家設科",
+      },
+    ];
+
+    // DOM元素
+    const loginBtn = document.getElementById("loginBtn");
+    const usernameInput = document.getElementById("username");
+    const passwordInput = document.getElementById("password");
+    const togglePassword = document.getElementById("togglePassword");
+    const messageDiv = document.getElementById("message");
+    const userGrid = document.getElementById("userGrid");
+    const loginForm = document.getElementById("loginForm");
+
+    // 管理員密碼修改相關元素
+    const adminPanel = document.getElementById("adminPanel");
+    const changeUserSelect = document.getElementById("changeUserSelect");
+    const newPasswordInput = document.getElementById("newPassword");
+    const changePasswordBtn = document.getElementById("changePasswordBtn");
+    const adminLogoutBtn = document.getElementById("adminLogoutBtn");
+    const adminMessage = document.getElementById("adminMessage");
+
+    // 當前登錄用戶
+    let currentUser = null;
+
+    // 顯示消息
+    function showMessage(element, message, isSuccess) {
+      element.textContent = message;
+      element.className = "message " + (isSuccess ? "success" : "error");
+      element.style.display = "block";
+
+      setTimeout(() => {
+        element.style.display = "none";
+      }, 3000);
+    }
+
+    // 初始化使用者卡片，顯示部門名稱標籤
+    function renderUserCards(filter = "all") {
+      userGrid.innerHTML = "";
+
+      users.forEach((user) => {
+        if (filter !== "all" && user.role !== filter) return;
+
+        const card = document.createElement("div");
+        card.className = `user-card ${user.role}`;
+
+        let icon, type;
+        if (user.role === "admin") {
+          icon = '<i class="fas fa-user-shield"></i>';
+          type = "管理員帳戶";
+        } else if (user.role === "user") {
+          icon = '<i class="fas fa-user-tie"></i>';
+          type = "普通用戶";
+        } else {
+          icon = '<i class="fas fa-search"></i>';
+          type = `查詢帳戶 (${user.linkedUser})`;
+        }
+
+        const label = user.label ? ` - ${user.label}` : "";
+
+        card.innerHTML = `
+            ${icon}
+            <h3>${user.username}${label}</h3>
+            <p>${type}</p>
+        `;
+
+        // 管理員點擊：只填用戶名
+        if (user.role === "admin") {
+          card.addEventListener("click", () => {
+            usernameInput.value = user.username;
+            passwordInput.value = "";
+            passwordInput.focus();
+          });
+        }
+        // 普通用戶和查詢帳戶點擊直接跳轉其頁面
+        else if (user.role === "user" || user.role === "query") {
+          card.addEventListener("click", () => {
+            window.location.href = user.page;
+          });
+        }
+
+        userGrid.appendChild(card);
+      });
+    }
+
+    // 登錄功能
+    function login() {
+      const username = usernameInput.value.trim();
+      const password = passwordInput.value.trim();
+
+      if (!username || !password) {
+        showMessage(messageDiv, "請輸入用戶名和密碼", false);
+        return;
+      }
+
+      const user = users.find(
+        (u) => u.username === username && u.password === password
+      );
+
+      if (user) {
+        currentUser = user;
+
+        if (user.username === "admin") {
+          // 管理員登入，顯示管理員密碼修改區塊，隱藏登入表單
+          loginForm.style.display = "none";
+          adminPanel.style.display = "block";
+          populateUserSelect();
+          showMessage(messageDiv, "管理員登入成功，請修改密碼或登出", true);
+        } else if (user.username === "dep-admin") {
+          // 部門管理員直接跳轉到指定頁面
+          window.location.href = user.page;
+        } else if (user.role === "query") {
+          // 查詢帳戶直接跳轉到報表管理頁面
+          window.location.href = user.page;
+        } else {
+          // 普通用戶直接跳轉到登入頁面
+          window.location.href = user.page;
+        }
+      } else {
+        showMessage(messageDiv, "用戶名或密碼錯誤", false);
+      }
+    }
+
+    // 填充管理員修改密碼的用戶下拉選單（排除管理員自己）
+    function populateUserSelect() {
+      changeUserSelect.innerHTML = "";
+      users.forEach((user) => {
+        if (user.role !== "admin") {
+          const option = document.createElement("option");
+          option.value = user.username;
+          option.textContent = `${user.username}${user.label ? " - " + user.label : ""}`;
+          changeUserSelect.appendChild(option);
+        }
+      });
+    }
+
+    // 修改密碼功能（管理員專用）
+    function changePassword() {
+      const selectedUser = changeUserSelect.value;
+      const newPassword = newPasswordInput.value.trim();
+
+      if (!newPassword) {
+        showMessage(adminMessage, "請輸入新密碼", false);
+        return;
+      }
+
+      const userToChange = users.find((u) => u.username === selectedUser);
+      if (!userToChange) {
+        showMessage(adminMessage, "選擇的用戶不存在", false);
+        return;
+      }
+
+      userToChange.password = newPassword;
+      newPasswordInput.value = "";
+      showMessage(adminMessage, `用戶 ${selectedUser} 密碼已修改成功`, true);
+    }
+
+    // 管理員登出
+    function adminLogout() {
+      currentUser = null;
+      adminPanel.style.display = "none";
+      loginForm.style.display = "block";
+      usernameInput.value = "";
+      passwordInput.value = "";
+      showMessage(messageDiv, "管理員已登出", true);
+    }
+
+    // 切換密碼可見性
+    function togglePasswordVisibility() {
+      if (!passwordInput) return;
+      const type =
+        passwordInput.getAttribute("type") === "password" ? "text" : "password";
+      passwordInput.setAttribute("type", type);
+      togglePassword.innerHTML =
+        type === "password"
+          ? '<i class="fas fa-eye"></i>'
+          : '<i class="fas fa-eye-slash"></i>';
+    }
+
+    // 事件監聽
+    if (loginBtn) loginBtn.addEventListener("click", login);
+    if (togglePassword) togglePassword.addEventListener("click", togglePasswordVisibility);
+    if (changePasswordBtn) changePasswordBtn.addEventListener("click", changePassword);
+    if (adminLogoutBtn) adminLogoutBtn.addEventListener("click", adminLogout);
+
+    // 按Enter鍵登錄
+    if (passwordInput) {
+      passwordInput.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") {
+          login();
+        }
+      });
+    }
+
+    // 用戶類型篩選
+    const filterButtons = {
+      all: document.getElementById("showAllBtn"),
+      admin: document.getElementById("showAdminBtn"),
+      user: document.getElementById("showUserBtn"),
+      query: document.getElementById("showQueryBtn"),
+    };
+
+    Object.entries(filterButtons).forEach(([key, btn]) => {
+      if (!btn) return;
+      btn.addEventListener("click", () => {
+        Object.values(filterButtons).forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        renderUserCards(key);
+      });
+    });
+
+    // 初始化
+    renderUserCards();
+  </script>
+</body>
+</html>

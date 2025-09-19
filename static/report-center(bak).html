@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>報表中心 - 校園物料管理系統（完善授權流程）</title>
+  <script src="https://cdn.jsdelivr.net/npm/axios@1.1.3/dist/axios.min.js"></script>
+  <style>
+    body {
+      font-family: "Microsoft JhengHei", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f4f6f8;
+      margin: 0; padding: 20px;
+      color: #333;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+      color: #2c3e50;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: white;
+      padding: 20px 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgb(0 0 0 / 0.1);
+    }
+    label {
+      display: inline-block;
+      margin-bottom: 6px;
+      font-weight: 600;
+      color: #34495e;
+    }
+    select, input[type="date"], input[type="text"], input[type="password"] {
+      width: 33.33%;
+      padding: 8px 10px;
+      margin-bottom: 16px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+    .form-group {
+      margin-bottom: 18px;
+    }
+    #dateRangeInputs label,
+    #monthInputs label {
+      display: inline-block;
+      width: auto;
+      margin-right: 8px;
+      font-weight: 600;
+      color: #34495e;
+    }
+    #dateRangeInputs input,
+    #monthInputs select {
+      vertical-align: middle;
+      margin-right: 15px;
+    }
+    .radio-group {
+      margin-bottom: 18px;
+    }
+    .radio-group label {
+      margin-right: 20px;
+      font-weight: normal;
+    }
+    button {
+      background-color: #4a90e2;
+      border: none;
+      color: white;
+      padding: 12px 25px;
+      font-size: 16px;
+      border-radius: 5px;
+      cursor: pointer;
+      margin-right: 15px;
+      transition: background-color 0.3s ease;
+    }
+    button:hover {
+      background-color: #357ABD;
+    }
+    button:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+    }
+    .btn-group {
+      text-align: center;
+      margin-top: 30px;
+    }
+    .footer-note {
+      margin-top: 40px;
+      font-size: 13px;
+      color: #888;
+      text-align: center;
+    }
+    .error-message {
+      color: red;
+      margin-top: 10px;
+      text-align: center;
+    }
+    .login-container {
+      text-align: center;
+      margin-top: 50px;
+    }
+    .login-container input {
+        width: 250px;
+        margin-bottom: 10px;
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    .login-container button {
+        margin-top: 15px;
+    }
+    /* 新增歡迎訊息與登出按鈕樣式 */
+    #welcomeLogoutContainer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding: 10px 15px;
+      background-color: #e9f0fb;
+      border-radius: 6px;
+      font-weight: 600;
+      color: #2c3e50;
+    }
+    #welcomeLogoutContainer button {
+      background-color: #dc3545;
+      padding: 6px 15px;
+      font-size: 14px;
+      border-radius: 4px;
+      margin: 0;
+    }
+    #welcomeLogoutContainer button:hover {
+      background-color: #b02a37;
+    }
+  </style>
+</head>
+<body>
+  <div class="container" role="main">
+    <h1>報表中心</h1>
+
+    <!-- 新增歡迎訊息與登出按鈕區塊 -->
+    <div id="welcomeLogoutContainer" style="display:none;">
+      <span id="welcomeMessage">歡迎，</span>
+      <button id="logoutBtn" type="button" aria-label="登出">登出</button>
+    </div>
+
+    <form id="reportForm" aria-label="報表查詢表單" style="display:none;">
+
+      <div class="form-group">
+        <label for="reportType">選擇報表類型</label><br />
+        <select id="reportType" name="reportType" required aria-required="true">
+          <option value="stock_summary">庫存摘要報表</option>
+          <option value="in_records">入庫明細查詢</option>
+          <option value="out_records">出庫明細查詢</option>
+          <option value="low_stock_alert">低庫存警示報表</option>
+        </select>
+      </div>
+
+      <fieldset class="radio-group" aria-labelledby="queryModeLabel">
+        <legend id="queryModeLabel">查詢模式</legend>
+        <label><input type="radio" name="queryMode" value="daterange" checked /> 依日期範圍</label>
+        <label><input type="radio" name="queryMode" value="month" /> 依月份</label>
+      </fieldset>
+
+      <div id="dateRangeInputs" class="form-group">
+        <label for="startDate">開始日期</label>
+        <input type="date" id="startDate" name="startDate" aria-describedby="dateRangeHelp" />
+        <label for="endDate">結束日期</label>
+        <input type="date" id="endDate" name="endDate" aria-describedby="dateRangeHelp" />
+        <br />
+        <small id="dateRangeHelp" style="color:#666;">格式：YYYY-MM-DD</small>
+      </div>
+
+      <div id="monthInputs" class="form-group" style="display:none;">
+        <label for="yearSelect">年份</label>
+        <select id="yearSelect" name="yearSelect" aria-describedby="monthHelp"></select>
+        <label for="monthSelect">月份</label>
+        <select id="monthSelect" name="monthSelect" aria-describedby="monthHelp"></select>
+        <br />
+        <small id="monthHelp" style="color:#666;">選擇年份與月份</small>
+      </div>
+
+      <div class="form-group">
+        <label for="categorySelect">類別</label><br />
+        <select id="categorySelect" name="categorySelect" aria-describedby="categoryHelp">
+          <option value="all">所有類別</option>
+        </select>
+        <br />
+        <small id="categoryHelp" style="color:#666;">可選擇特定類別篩選</small>
+      </div>
+
+      <div class="form-group">
+        <label for="itemSelect">物料名稱</label><br />
+        <select id="itemSelect" name="itemSelect" aria-describedby="itemHelp">
+          <option value="all">所有物料</option>
+        </select>
+        <br />
+        <small id="itemHelp" style="color:#666;">可選擇特定物料篩選</small>
+      </div>
+
+      <div class="form-group">
+        <label for="schoolDept">校名與科別</label><br />
+        <input type="text" id="schoolDept" name="schoolDept" value="鳳山商工 **** 科" aria-describedby="schoolDeptHelp" />
+        <br />
+        <small id="schoolDeptHelp" style="color:#666;">請輸入校名與科別，將顯示於報表標題</small>
+      </div>
+
+      <div class="btn-group">
+        <button type="button" id="previewBtn">預覽報表 (PDF)</button>
+        <button type="button" id="exportBtn">匯出 Excel</button>
+      </div>
+    </form>
+
+    <div id="loginContainer" class="login-container" style="display:none;">
+        <h2>請授權登入</h2>
+        <input type="text" id="loginUsername" placeholder="使用者名稱" autocomplete="username" />
+        <input type="password" id="loginPassword" placeholder="密碼" autocomplete="current-password" />
+        <button type="button" id="loginBtn">授權</button>
+        <p id="loginMessage" class="error-message" role="alert" aria-live="assertive"></p>
+    </div>
+
+    <p class="footer-note">版權所有，未經授權請勿轉載使用。</p>
+  </div>
+
+  <script>
+    (function() {
+      const API_BASE_URL = 'http://10.10.7.66:5000/api';
+
+      const reportForm = document.getElementById('reportForm');
+      const loginContainer = document.getElementById('loginContainer');
+      const loginBtn = document.getElementById('loginBtn');
+      const loginUsername = document.getElementById('loginUsername');
+      const loginPassword = document.getElementById('loginPassword');
+      const loginMessage = document.getElementById('loginMessage');
+      const categorySelect = document.getElementById('categorySelect');
+      const itemSelect = document.getElementById('itemSelect');
+      const welcomeLogoutContainer = document.getElementById('welcomeLogoutContainer');
+      const welcomeMessage = document.getElementById('welcomeMessage');
+      const logoutBtn = document.getElementById('logoutBtn');
+
+      // 全域變數保存當前 token及使用者名稱，避免存 localStorage
+      let currentToken = null;
+      let currentUsername = null;
+
+      // axios 實例，每次請求前帶入 currentToken
+      const apiClient = axios.create({
+        baseURL: API_BASE_URL,
+        timeout: 10000,
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+
+      apiClient.interceptors.request.use(config => {
+        if (currentToken) {
+          config.headers['Authorization'] = `Bearer ${currentToken}`;
+        }
+        return config;
+      }, error => Promise.reject(error));
+
+      // 攔截回應錯誤，401 自動跳登入
+      apiClient.interceptors.response.use(
+        response => response,
+        error => {
+          if (error.response && error.response.status === 401) {
+            currentToken = null;
+            currentUsername = null;
+            showLoginForm('授權失效，請重新登入。');
+          }
+          return Promise.reject(error);
+        }
+      );
+
+      // 用來暫存尚未授權完成即要執行的報表請求參數
+      let pendingReportRequest = null;
+
+      function initializeUI() {
+        // 初始化年份與月份下拉選單
+        const yearSelect = document.getElementById('yearSelect');
+        const monthSelect = document.getElementById('monthSelect');
+        const today = new Date();
+        const currentYear = today.getFullYear();
+
+        for(let y = currentYear - 10; y <= currentYear + 2; y++) {
+            const opt = document.createElement('option');
+            opt.value = y;
+            opt.textContent = y;
+            if(y === currentYear) opt.selected = true;
+            yearSelect.appendChild(opt);
+        }
+        for(let m = 1; m <= 12; m++) {
+            const opt = document.createElement('option');
+            opt.value = m.toString().padStart(2, '0');
+            opt.textContent = m.toString().padStart(2, '0');
+            if(m === today.getMonth() + 1) opt.selected = true;
+            monthSelect.appendChild(opt);
+        }
+
+        // 查詢模式切換事件
+        document.querySelectorAll('input[name="queryMode"]').forEach(radio => {
+            radio.addEventListener('change', () => {
+                const dateRangeInputs = document.getElementById('dateRangeInputs');
+                const monthInputs = document.getElementById('monthInputs');
+                if (radio.value === 'daterange') {
+                    dateRangeInputs.style.display = '';
+                    monthInputs.style.display = 'none';
+                } else {
+                    dateRangeInputs.style.display = 'none';
+                    monthInputs.style.display = '';
+                }
+                sendHeightToParent();
+            });
+        });
+
+        // 類別選擇改變時載入物料
+        categorySelect.addEventListener('change', (e) => {
+            fetchMaterials(e.target.value);
+        });
+
+        // 按鈕事件綁定
+        document.getElementById('previewBtn').addEventListener('click', () => handleReportExport('preview'));
+        document.getElementById('exportBtn').addEventListener('click', () => handleReportExport('export'));
+        loginBtn.addEventListener('click', handleLogin);
+        logoutBtn.addEventListener('click', handleLogout);
+
+        // 預設載入類別與物料，但先檢查是否有 token
+        if (currentToken) {
+          showReportForm();
+          loadInitialData();
+          showWelcomeLogout();
+        } else {
+          showLoginForm();
+        }
+      }
+
+      // 顯示登入區塊，隱藏報表表單及歡迎登出區塊
+      function showLoginForm(message = '') {
+        reportForm.style.display = 'none';
+        loginContainer.style.display = 'block';
+        welcomeLogoutContainer.style.display = 'none';
+        loginMessage.textContent = message;
+        sendHeightToParent();
+        loginUsername.focus();
+      }
+
+      // 顯示報表表單及歡迎登出區塊，隱藏登入區塊
+      function showReportForm() {
+        reportForm.style.display = 'block';
+        loginContainer.style.display = 'none';
+        loginMessage.textContent = '';
+        showWelcomeLogout();
+        sendHeightToParent();
+      }
+
+      // 顯示歡迎訊息與登出按鈕
+      function showWelcomeLogout() {
+        if (currentUsername) {
+          welcomeMessage.textContent = `歡迎，${currentUsername}`;
+          welcomeLogoutContainer.style.display = 'flex';
+        } else {
+          welcomeLogoutContainer.style.display = 'none';
+        }
+      }
+
+      // 登出功能
+      function handleLogout() {
+        currentToken = null;
+        currentUsername = null;
+        showLoginForm('您已登出。');
+      }
+
+      // 登入授權，成功後存 token 及 username，並載入初始資料
+      async function handleLogin() {
+        const username = loginUsername.value.trim();
+        const password = loginPassword.value.trim();
+
+        if (!username || !password) {
+          loginMessage.textContent = '請輸入使用者名稱和密碼。';
+          return;
+        }
+        loginBtn.disabled = true;
+        loginMessage.textContent = '授權中...';
+
+        try {
+          const response = await axios.post(`${API_BASE_URL}/login`, { username, password });
+          if (response.status === 200 && response.data.access_token) {
+            currentToken = response.data.access_token;
+            currentUsername = username;
+            loginMessage.textContent = '授權成功！';
+            loginPassword.value = '';
+            showReportForm();
+            await loadInitialData();
+            // 若之前報表請求被中斷，這裡可接續執行
+            if (pendingReportRequest) {
+              await executeReportRequest(pendingReportRequest);
+              pendingReportRequest = null;
+            }
+          } else {
+            loginMessage.textContent = '授權失敗，請檢查帳號和密碼。';
+          }
+        } catch (error) {
+          console.error('Login error:', error.response ? error.response.data : error.message);
+          loginMessage.textContent = error.response?.data?.error || '授權失敗，請稍後再試。';
+        } finally {
+          loginBtn.disabled = false;
+          sendHeightToParent();
+          showWelcomeLogout();
+        }
+      }
+
+      // 載入類別與物料初始資料
+      async function loadInitialData() {
+        await fetchCategories();
+        await fetchMaterials();
+      }
+
+      // 載入類別，並設定下拉選單
+      async function fetchCategories() {
+        setSelectLoading(categorySelect, true);
+        try {
+          const res = await apiClient.get('/categories');
+          categorySelect.innerHTML = '<option value="all">所有類別</option>';
+          res.data.forEach(cat => {
+            const option = document.createElement('option');
+            option.value = cat.name;
+            option.textContent = cat.name;
+            categorySelect.appendChild(option);
+          });
+        } catch (e) {
+          console.error('Error fetching categories:', e);
+          if (e.response && e.response.status === 401) {
+            showLoginForm('授權失效，請重新登入。');
+          } else {
+            alert('載入類別失敗，請檢查網路或伺服器。');
+          }
+        } finally {
+          setSelectLoading(categorySelect, false);
+          sendHeightToParent();
+        }
+      }
+
+      // 載入物料，依類別篩選
+      async function fetchMaterials(category = 'all') {
+        setSelectLoading(itemSelect, true);
+        try {
+          const res = await apiClient.get('/materials', { params: { category: category } });
+          itemSelect.innerHTML = '<option value="all">所有物料</option>';
+          res.data.forEach(m => {
+            if (category === 'all' || m.category === category) {
+              const option = document.createElement('option');
+              option.value = m.item_id;
+              option.textContent = `${m.item_id} - ${m.name}`;
+              itemSelect.appendChild(option);
+            }
+          });
+        } catch (e) {
+          console.error('Error fetching materials:', e);
+          if (e.response && e.response.status === 401) {
+            showLoginForm('授權失效，請重新登入。');
+          } else {
+            alert('載入物料失敗，請檢查網路或伺服器。');
+          }
+        } finally {
+          setSelectLoading(itemSelect, false);
+          sendHeightToParent();
+        }
+      }
+
+      // 輔助函式，設定下拉選單載入狀態
+      function setSelectLoading(selectElement, isLoading) {
+        if (isLoading) {
+          selectElement.disabled = true;
+          let option = selectElement.querySelector('.loading-option');
+          if (!option) {
+            option = document.createElement('option');
+            option.className = 'loading-option';
+            option.textContent = '載入中...';
+            selectElement.prepend(option);
+          }
+          selectElement.selectedIndex = 0;
+        } else {
+          selectElement.disabled = false;
+          const option = selectElement.querySelector('.loading-option');
+          if (option) option.remove();
+        }
+      }
+
+      // 點擊「預覽報表」或「匯出 Excel」時觸發
+      async function handleReportExport(type) {
+        // 檢查是否已有授權 token
+        if (!currentToken) {
+          // 尚未授權，先顯示登入表單，並暫存報表請求參數
+          pendingReportRequest = { type };
+          showLoginForm('請先授權登入，才能查詢報表。');
+          return;
+        }
+        // 有 token，直接執行報表請求
+        await executeReportRequest({ type });
+      }
+
+      // 執行報表請求（改用 AJAX 並帶 Authorization header）
+      async function executeReportRequest({ type }) {
+        try {
+          const reportType = document.getElementById('reportType').value;
+          const queryMode = document.querySelector('input[name="queryMode"]:checked').value;
+          const startDate = document.getElementById('startDate').value;
+          const endDate = document.getElementById('endDate').value;
+          const year = document.getElementById('yearSelect').value;
+          const month = document.getElementById('monthSelect').value;
+          const category = categorySelect.value;
+          const itemId = itemSelect.value;
+          const schoolDept = document.getElementById('schoolDept').value.trim();
+
+          if (queryMode === 'daterange') {
+            if (!startDate || !endDate) {
+              alert('請選擇完整的開始與結束日期');
+              return;
+            }
+            if (startDate > endDate) {
+              alert('結束日期不可早於開始日期');
+              return;
+            }
+          }
+
+          const params = {
+            report_type: reportType,
+            query_mode: queryMode,
+            category: category !== 'all' ? category : undefined,
+            item_id: itemId !== 'all' ? itemId : undefined,
+            school_dept: schoolDept || undefined,
+          };
+          if (queryMode === 'daterange') {
+            params.start_date = startDate;
+            params.end_date = endDate;
+          } else {
+            params.year = year;
+            params.month = month;
+          }
+
+          if (type === 'preview') {
+            // 預覽報表 PDF，responseType 設 blob
+            const response = await apiClient.get('/report/preview', {
+              params,
+              responseType: 'blob',
+            });
+            const blob = new Blob([response.data], { type: 'application/pdf' });
+            const url = window.URL.createObjectURL(blob);
+            window.open(url, '_blank');
+            // 可選：釋放 URL
+            setTimeout(() => window.URL.revokeObjectURL(url), 10000);
+          } else if (type === 'export') {
+            // 匯出 Excel，responseType 設 blob
+            const response = await apiClient.get('/report/export_excel', {
+              params,
+              responseType: 'blob',
+            });
+            const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const url = window.URL.createObjectURL(blob);
+
+            // 下載檔案
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${reportType}_${new Date().toISOString().slice(0,10)}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+
+            setTimeout(() => window.URL.revokeObjectURL(url), 10000);
+          }
+        } catch (err) {
+          console.error('報表請求錯誤:', err);
+          if (err.response && err.response.status === 401) {
+            alert('授權失效，請重新登入。');
+            currentToken = null;
+            currentUsername = null;
+            showLoginForm('授權失效，請重新登入。');
+          } else {
+            alert('報表請求失敗，請稍後再試。');
+          }
+        }
+      }
+
+      function sendHeightToParent() {
+        setTimeout(() => {
+          if (window.parent !== window) {
+            const height = document.body.scrollHeight;
+            window.parent.postMessage({ type: 'adjustHeight', height }, '*');
+          }
+        }, 100);
+      }
+
+      window.addEventListener('load', () => {
+        initializeUI();
+      });
+    })();
+  </script>
+</body>
+</html>

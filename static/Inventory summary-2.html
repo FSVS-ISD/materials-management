@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>庫存管理 - 庫存摘要與分佈圖 (含3D立體餅狀圖)</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/vue@3.2.47/dist/vue.global.prod.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      background-color: #f8f9fa;
+    }
+    #app {
+      max-width: 900px;
+      width: 100%;
+      padding: 20px 15px;
+      box-sizing: border-box;
+    }
+    .low-stock {
+      color: #dc3545;
+      font-weight: bold;
+    }
+    .chart-container {
+      position: relative;
+      width: 100%;
+      max-width: 900px;
+      margin: 0 auto 2rem auto;
+    }
+    .bar-chart-box {
+      max-width: 900px;
+      margin: 0 auto 2rem auto;
+    }
+    .pie-chart-box {
+      max-width: 600px;
+      margin: 0 auto 3rem auto;
+    }
+    .toast-container {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      z-index: 1055;
+    }
+  </style>
+</head>
+<body>
+  <div id="app" ref="appRoot" class="container py-4" aria-live="polite" aria-atomic="true">
+    <h1 class="mb-4 text-center">庫存管理 - 庫存摘要與分佈圖</h1>
+
+    <!-- 歡迎訊息與登出按鈕 -->
+    <div v-if="currentUser" class="mb-3 d-flex justify-content-between align-items-center" role="region" aria-label="使用者資訊">
+      <div>歡迎，{{ currentUser }}</div>
+      <button class="btn btn-outline-danger btn-sm" @click="logout" aria-label="登出">登出</button>
+    </div>
+
+    <div v-if="authErrorMessage && !showLoginForm" class="alert alert-danger text-center" role="alert" aria-live="assertive" aria-atomic="true">
+      {{ authErrorMessage }}
+    </div>
+
+    <!-- 手動登入表單 -->
+    <div v-if="showLoginForm" class="card mx-auto mb-4" style="max-width: 400px;">
+      <div class="card-body">
+        <h5 class="card-title text-center mb-3">請登入以取得授權</h5>
+        <div class="mb-3">
+          <input v-model="loginForm.username" class="form-control" placeholder="帳號" autocomplete="username" />
+        </div>
+        <div class="mb-3">
+          <input v-model="loginForm.password" type="password" class="form-control" placeholder="密碼" autocomplete="current-password" />
+        </div>
+        <div class="d-grid">
+          <button @click="login" class="btn btn-primary" :disabled="loginLoading" aria-label="登入按鈕">
+            {{ loginLoading ? '登入中...' : '登入' }}
+          </button>
+        </div>
+        <div class="mt-3 text-danger text-center" v-if="loginError" role="alert" aria-live="assertive" aria-atomic="true">{{ loginError }}</div>
+      </div>
+    </div>
+
+    <div v-if="token && !authErrorMessage">
+      <div class="mb-4 d-flex justify-content-between align-items-center">
+        <h4>庫存摘要</h4>
+        <button class="btn btn-outline-primary" @click="fetchMaterialsSummary(true)" :disabled="loadingSummary" aria-label="更新庫存摘要">
+          {{ loadingSummary ? '更新中...' : '更新庫存摘要' }}
+        </button>
+      </div>
+
+      <div v-if="loadingSummary" class="text-center mb-3" aria-live="polite" aria-busy="true">
+        <div class="spinner-border text-primary" role="status">
+          <span class="visually-hidden">載入中...</span>
+        </div>
+      </div>
+
+      <div v-if="materials.length === 0 && !loadingSummary" class="alert alert-info" role="alert">
+        目前沒有任何物料資料。
+      </div>
+
+      <div v-if="materials.length > 0">
+        <div class="table-responsive mb-4" tabindex="0" aria-label="物料庫存表格">
+          <table class="table table-striped table-bordered align-middle">
+            <thead class="table-light">
+              <tr>
+                <th scope="col">物料編號</th>
+                <th scope="col">條碼</th>
+                <th scope="col">分類</th>
+                <th scope="col">名稱</th>
+                <th scope="col">當前庫存</th>
+                <th scope="col">安全庫存</th>
+                <th scope="col">單位</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="m in materials" :key="m.id" :class="{'low-stock': m.current_stock <= m.safety_stock}">
+                <td>{{ m.item_id }}</td>
+                <td>{{ m.barcode || '-' }}</td>
+                <td>{{ m.category }}</td>
+                <td>{{ m.name }}</td>
+                <td>{{ m.current_stock }}</td>
+                <td>{{ m.safety_stock }}</td>
+                <td>{{ m.unit }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="mb-4" tabindex="0" aria-label="低安全庫存物料列表">
+          <h5>⚠️ 低安全庫存物料</h5>
+          <div v-if="lowStockMaterials.length === 0" class="alert alert-success" role="alert">
+            目前沒有低於安全庫存的物料。
+          </div>
+          <ul v-else class="list-group">
+            <li v-for="m in lowStockMaterials" :key="m.id" class="list-group-item list-group-item-danger">
+              {{ m.name }} ({{ m.item_id }}) - 庫存：{{ m.current_stock }} {{ m.unit }}，安全庫存：{{ m.safety_stock }}
+            </li>
+          </ul>
+        </div>
+
+        <div class="bar-chart-box" tabindex="0" aria-label="庫存分佈柱狀圖">
+          <h5>📊 庫存分佈柱狀圖 (當前庫存與安全庫存並列)</h5>
+          <div class="chart-container">
+            <canvas id="barStockChart" role="img" aria-label="柱狀圖顯示各物料的當前庫存與安全庫存"></canvas>
+          </div>
+        </div>
+
+        <div class="pie-chart-box" tabindex="0" aria-label="3D立體庫存分佈餅狀圖">
+          <h5>📊 3D立體庫存分佈餅狀圖 (依分類別)</h5>
+          <div class="chart-container">
+            <canvas id="pieStockChart" role="img" aria-label="餅狀圖顯示各分類別庫存比例"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Toast 提示訊息 -->
+    <div class="toast-container" aria-live="polite" aria-atomic="true">
+      <div class="toast align-items-center text-bg-info border-0" role="alert" aria-live="assertive" aria-atomic="true" ref="toast" :class="{ show: toastVisible }" style="min-width: 250px;">
+        <div class="d-flex">
+          <div class="toast-body">
+            {{ toastMessage }}
+          </div>
+          <button type="button" class="btn-close btn-close-white me-2 m-auto" aria-label="關閉" @click="hideToast"></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const { createApp, nextTick } = Vue;
+    createApp({
+      data() {
+        return {
+          apiUrl: localStorage.getItem('apiUrl') || "http://10.10.7.66:5000/api",
+          token: localStorage.getItem('token') || "",
+          currentUser: localStorage.getItem('currentUser') || "",
+          authErrorMessage: "",
+          showLoginForm: false,
+          loginForm: { username: "", password: "" },
+          loginLoading: false,
+          loginError: "",
+          materials: [],
+          lowStockMaterials: [],
+          loadingSummary: false,
+          barStockChart: null,
+          pieStockChart: null,
+          toastMessage: '',
+          toastVisible: false,
+          toastTimeoutId: null,
+          resizeObserver: null,
+          mutationObserver: null,
+          _lastSentHeight: 0,
+          _onWindowResize: null,
+          appRoot: null,
+          _resizeTimeout: null,
+          _mutationTimeout: null,
+        };
+      },
+      mounted() {
+        this.appRoot = this.$refs.appRoot;
+
+        window.addEventListener('message', this.handleParentMessage);
+
+        this.initiateAuthorization();
+
+        if ('ResizeObserver' in window) {
+          this.resizeObserver = new ResizeObserver(() => {
+            if (this._resizeTimeout) clearTimeout(this._resizeTimeout);
+            this._resizeTimeout = setTimeout(() => {
+              this.sendHeightToParent();
+            }, 100);
+          });
+          this.resizeObserver.observe(this.appRoot);
+        } else {
+          this.mutationObserver = new MutationObserver(() => {
+            if (this._mutationTimeout) clearTimeout(this._mutationTimeout);
+            this._mutationTimeout = setTimeout(() => {
+              this.sendHeightToParent();
+            }, 100);
+          });
+          this.mutationObserver.observe(document.body, { childList: true, subtree: true, attributes: true });
+        }
+
+        this.$nextTick(() => {
+          this.sendHeightToParent();
+        });
+
+        this._onWindowResize = () => this.sendHeightToParent();
+        window.addEventListener('resize', this._onWindowResize);
+      },
+      beforeUnmount() {
+        if (this.resizeObserver) {
+          this.resizeObserver.disconnect();
+        }
+        if (this.mutationObserver) {
+          this.mutationObserver.disconnect();
+        }
+        window.removeEventListener('resize', this._onWindowResize);
+        window.removeEventListener('message', this.handleParentMessage);
+      },
+      methods: {
+        async initiateAuthorization() {
+          try {
+            const urlParams = new URLSearchParams(window.location.search);
+            let token = urlParams.get('token');
+            if (token) {
+              this.token = token;
+              localStorage.setItem('token', token);
+            } else {
+              token = localStorage.getItem('token') || '';
+              this.token = token;
+            }
+
+            if (!this.token) {
+              this.showLoginForm = true;
+              this.authErrorMessage = "請登入以取得授權。";
+              this.sendHeightToParent();
+              return;
+            }
+
+            this.currentUser = localStorage.getItem('currentUser') || '使用者';
+
+            await this.fetchMaterialsSummary(true);
+            this.showLoginForm = false;
+            this.authErrorMessage = "";
+
+            this.sendHeightToParent();
+          } catch (err) {
+            this.token = '';
+            this.currentUser = '';
+            localStorage.removeItem('token');
+            localStorage.removeItem('currentUser');
+            this.showLoginForm = true;
+            this.authErrorMessage = "授權失效或過期，請手動登入。";
+            this.sendHeightToParent();
+          }
+        },
+
+        async login() {
+          this.loginLoading = true;
+          this.loginError = "";
+          try {
+            const res = await axios.post(`${this.apiUrl}/login`, {
+              username: this.loginForm.username,
+              password: this.loginForm.password
+            });
+            if (res.data && res.data.access_token) {
+              this.token = res.data.access_token;
+              localStorage.setItem('token', this.token);
+
+              this.currentUser = this.loginForm.username;
+              localStorage.setItem('currentUser', this.currentUser);
+
+              this.authErrorMessage = "";
+              this.showLoginForm = false;
+              await this.fetchMaterialsSummary(true);
+              this.showToast('登入成功，已載入物料資料');
+              this.sendHeightToParent();
+            } else {
+              this.loginError = "登入失敗，伺服器未回傳有效 Token";
+            }
+          } catch (err) {
+            this.loginError = `登入失敗：${err.response?.data?.error || err.message}`;
+          } finally {
+            this.loginLoading = false;
+          }
+        },
+
+        logout() {
+          this.token = '';
+          this.currentUser = '';
+          localStorage.removeItem('token');
+          localStorage.removeItem('currentUser');
+          this.showLoginForm = true;
+          this.authErrorMessage = '';
+          this.materials = [];
+          this.lowStockMaterials = [];
+          this.showToast('已登出');
+          this.sendHeightToParent();
+
+          // 通知父頁面登出事件
+          window.parent.postMessage({ type: 'logout' }, '*');
+        },
+
+        async fetchMaterialsSummary(forceReload = false) {
+          if (!this.token) {
+            this.showLoginForm = true;
+            this.authErrorMessage = "尚未取得授權，請登入。";
+            this.sendHeightToParent();
+            return;
+          }
+          this.loadingSummary = true;
+          try {
+            const url = forceReload ? `${this.apiUrl}/materials?timestamp=${Date.now()}` : `${this.apiUrl}/materials`;
+            const res = await axios.get(url, {
+              headers: { Authorization: `Bearer ${this.token}` },
+            });
+            this.materials = res.data || [];
+            this.materials.forEach(m => {
+              m.current_stock = parseInt(m.current_stock) || 0;
+              m.safety_stock = parseInt(m.safety_stock) || 0;
+            });
+
+            this.lowStockMaterials = this.materials.filter(m => m.current_stock <= m.safety_stock);
+
+            await nextTick();
+            this.renderCharts();
+
+            this.authErrorMessage = "";
+            this.showLoginForm = false;
+
+            this.sendHeightToParent();
+
+            if (this.materials.length === 0) {
+              this.showToast('目前沒有任何物料資料');
+            }
+          } catch (e) {
+            if (e.response && (e.response.status === 401 || e.response.status === 422)) {
+              localStorage.removeItem('token');
+              this.token = '';
+              this.showLoginForm = true;
+              this.authErrorMessage = "授權失效或無效，請重新登入。";
+            } else {
+              this.showLoginForm = true;
+              this.authErrorMessage = "讀取物料資料失敗，請稍後再試。";
+            }
+            this.sendHeightToParent();
+          } finally {
+            this.loadingSummary = false;
+          }
+        },
+
+        renderCharts() {
+          this.renderBarChart();
+          this.renderPieChart3D();
+          this.$nextTick(() => {
+            this.sendHeightToParent();
+          });
+        },
+        renderBarChart() {
+          if (this.barStockChart) {
+            this.barStockChart.destroy();
+          }
+          const labels = this.materials.map(m => m.name);
+          const currentStockData = this.materials.map(m => m.current_stock);
+          const safetyStockData = this.materials.map(m => m.safety_stock);
+
+          const ctx = document.getElementById('barStockChart').getContext('2d');
+          this.barStockChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+              labels: labels,
+              datasets: [
+                {
+                  label: '當前庫存',
+                  data: currentStockData,
+                  backgroundColor: 'rgba(75, 192, 192, 0.7)',
+                  borderColor: 'rgba(75, 192, 192, 1)',
+                  borderWidth: 1
+                },
+                {
+                  label: '安全庫存',
+                  data: safetyStockData,
+                  backgroundColor: 'rgba(255, 159, 64, 0.7)',
+                  borderColor: 'rgba(255, 159, 64, 1)',
+                  borderWidth: 1
+                }
+              ]
+            },
+            options: {
+              responsive: true,
+              scales: {
+                y: {
+                  beginAtZero: true,
+                  ticks: { precision: 0 },
+                  title: { display: true, text: '庫存數量' }
+                },
+                x: {
+                  title: { display: true, text: '物料名稱' }
+                }
+              },
+              plugins: {
+                legend: { display: true, position: 'top' },
+                tooltip: {
+                  callbacks: {
+                    label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y}`
+                  }
+                }
+              }
+            }
+          });
+        },
+        renderPieChart3D() {
+          if (this.pieStockChart) {
+            this.pieStockChart.destroy();
+          }
+          const categoryMap = {};
+          this.materials.forEach(m => {
+            const currentStock = m.current_stock;
+            if (!isNaN(currentStock)) {
+              if (!categoryMap[m.category]) {
+                categoryMap[m.category] = 0;
+              }
+              categoryMap[m.category] += currentStock;
+            }
+          });
+          const labels = Object.keys(categoryMap);
+          const data = Object.values(categoryMap);
+
+          const baseColors = [
+            '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0',
+            '#9966FF', '#FF9F40', '#E7E9ED', '#71B37C',
+            '#F67019', '#00A6B4'
+          ];
+          const backgroundColors = baseColors.slice(0, labels.length).map(c => c);
+
+          const ctx = document.getElementById('pieStockChart').getContext('2d');
+          this.pieStockChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+              labels: labels,
+              datasets: [{
+                label: '分類庫存比例',
+                data: data,
+                backgroundColor: backgroundColors,
+                borderColor: '#fff',
+                borderWidth: 2,
+                hoverOffset: 30,
+                offset: 10
+              }]
+            },
+            options: {
+              responsive: true,
+              cutout: '40%',
+              plugins: {
+                legend: {
+                  position: 'right',
+                  labels: { boxWidth: 20, padding: 10 }
+                },
+                tooltip: {
+                  callbacks: {
+                    label: ctx => {
+                      const label = ctx.label || '';
+                      const value = ctx.parsed || 0;
+                      const total = ctx.dataset.data.reduce((sum, val) => sum + val, 0);
+                      const percent = total ? ((value / total) * 100).toFixed(1) : 0;
+                      return `${label}: ${value} (${percent}%)`;
+                    }
+                  }
+                }
+              },
+              animation: {
+                animateRotate: true,
+                animateScale: true
+              }
+            },
+            plugins: [{
+              id: 'shadow',
+              beforeDraw(chart) {
+                const ctx = chart.ctx;
+                ctx.save();
+                ctx.shadowColor = 'rgba(0,0,0,0.25)';
+                ctx.shadowBlur = 15;
+                ctx.shadowOffsetX = 0;
+                ctx.shadowOffsetY = 5;
+                ctx.restore();
+              }
+            }]
+          });
+        },
+
+        showToast(message, duration = 3000) {
+          if (this.toastTimeoutId) {
+            clearTimeout(this.toastTimeoutId);
+            this.toastTimeoutId = null;
+          }
+          this.toastMessage = message;
+          this.toastVisible = true;
+          this.toastTimeoutId = setTimeout(() => {
+            this.toastVisible = false;
+            this.toastTimeoutId = null;
+          }, duration);
+        },
+        hideToast() {
+          if (this.toastTimeoutId) {
+            clearTimeout(this.toastTimeoutId);
+            this.toastTimeoutId = null;
+          }
+          this.toastVisible = false;
+        },
+        handleParentMessage(event) {
+          // 可根據需要擴充父頁面訊息處理
+          if (event.origin === window.location.origin || event.origin === "null") {
+            if (event.data && (event.data.type === 'inventoryUpdated' || event.data.type === 'refreshInventory')) {
+              this.fetchMaterialsSummary(true).then(() => {
+                this.showToast('庫存資料已更新');
+              });
+            }
+          }
+        },
+        sendHeightToParent() {
+          const el = this.appRoot;
+          if (!el) return;
+          // 使用 offsetHeight 或 getBoundingClientRect 取得高度
+          const height = el.offsetHeight || el.getBoundingClientRect().height;
+          if (this._lastSentHeight !== height) {
+            window.parent.postMessage({ type: 'adjustHeight', height }, '*');
+            this._lastSentHeight = height;
+          }
+        }
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
+```
+
+---
