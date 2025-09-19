@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>庫存管理 - 庫存摘要與分佈圖 (含3D立體餅狀圖)</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/vue@3.2.47/dist/vue.global.prod.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background-color: #f8f9fa;
+    }
+    #app {
+      max-width: 900px;
+      width: 100%;
+      padding: 20px 15px;
+      box-sizing: border-box;
+    }
+    .home-button-container {
+      text-align: center;
+      margin-top: 30px;
+      padding: 20px 0;
+    }
+  </style>
+
+  <style>
+    body, html, #app {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      background-color: #f8f9fa;
+    }
+    .low-stock {
+      color: #dc3545;
+      font-weight: bold;
+    }
+    .chart-container {
+      position: relative;
+      width: 100%;
+      max-width: 900px;
+      margin: 0 auto 2rem auto;
+    }
+    .bar-chart-box {
+      max-width: 900px;
+      margin: 0 auto 2rem auto;
+    }
+    .pie-chart-box {
+      max-width: 600px;
+      margin: 0 auto 3rem auto;
+    }
+    .table-responsive {
+      display: flex;
+      justify-content: center;
+    }
+    .table-responsive > table {
+      margin: 0 auto;
+    }
+    .list-group {
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+  </style>
+</head>
+<body>
+  <div id="app" class="container py-4" style="max-width: 900px;">
+    <h1 class="mb-4 text-center">庫存管理 - 庫存摘要與分佈圖</h1>
+
+    <!-- 新增歡迎訊息與登出按鈕 -->
+    <div v-if="token && !authErrorMessage" class="mb-3 d-flex justify-content-between align-items-center">
+      <div>歡迎，<strong>{{ currentUser }}</strong></div>
+      <button class="btn btn-outline-danger btn-sm" @click="logout">登出</button>
+    </div>
+
+    <div v-if="authErrorMessage" class="alert alert-danger text-center">
+      {{ authErrorMessage }}
+    </div>
+
+    <div v-if="showLoginForm" class="card mx-auto mb-4" style="max-width: 400px;">
+      <div class="card-body">
+        <h5 class="card-title text-center mb-3">請按【科別】快速登入/輸入帳號密碼，以取得授權查詢</h5>
+
+        <!-- 快速登入卡片 -->
+        <div class="mb-3 d-flex flex-wrap justify-content-center gap-2">
+          <!-- 修改：只顯示當前登入帳號對應的科別按鈕 -->
+          <button v-for="card in filteredQuickLoginCards" :key="card.username" type="button" class="btn btn-outline-primary" 
+            @click="quickLogin(card)">
+            {{ card.label }}
+          </button>
+        </div>
+
+        <div class="mb-3">
+          <input v-model="loginForm.username" class="form-control" placeholder="帳號" />
+        </div>
+        <div class="mb-3">
+          <input v-model="loginForm.password" type="password" class="form-control" placeholder="密碼" />
+        </div>
+        <div class="d-grid">
+          <button @click="login" class="btn btn-primary" :disabled="loginLoading">
+            {{ loginLoading ? '登入中...' : '登入' }}
+          </button>
+        </div>
+        <div class="mt-3 text-danger text-center" v-if="loginError">{{ loginError }}</div>
+      </div>
+    </div>
+
+    <div v-if="token && !authErrorMessage">
+      <div class="mb-4 d-flex justify-content-between align-items-center">
+        <h4><span style="font-size: 1.5em; color: #b81414;">{{ currentDepName }}</span> 庫存摘要</h4>
+        <button class="btn btn-outline-primary" @click="fetchMaterialsSummary(true)" :disabled="loadingSummary">
+          {{ loadingSummary ? '更新中...' : '更新庫存摘要' }}
+        </button>
+      </div>
+
+      <div v-if="loadingSummary" class="text-center mb-3">
+        <div class="spinner-border text-primary" role="status">
+          <span class="visually-hidden">載入中...</span>
+        </div>
+      </div>
+
+      <div v-if="materials.length === 0 && !loadingSummary" class="alert alert-info">
+        目前沒有任何物料資料。
+      </div>
+
+      <div v-if="materials.length > 0">
+        <div class="table-responsive mb-4">
+          <table class="table table-striped table-bordered align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>物料編號</th>
+                <th>條碼</th>
+                <th>名稱</th>
+                <th>分類</th>
+                <th>當前庫存</th>
+                <th>安全庫存</th>
+                <th>單位</th>
+                <th>存放地點</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="m in materials" :key="m.id" :class="{'low-stock': m.current_stock <= m.safety_stock}">
+                <td>{{ m.item_id }}</td>
+                <td>{{ m.barcode || '-' }}</td>
+                <td>{{ m.name }}</td>
+                <td>{{ m.category }}</td>
+                <td>{{ m.current_stock }}</td>
+                <td>{{ m.safety_stock }}</td>
+                <td>{{ m.unit }}</td>
+                <td>{{ m.notes }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="mb-4">
+          <h5>⚠️ 低安全庫存物料</h5>
+          <div v-if="lowStockMaterials.length === 0" class="alert alert-success">
+            目前沒有低於安全庫存的物料。
+          </div>
+          <ul v-else class="list-group">
+            <li v-for="m in lowStockMaterials" :key="m.id" class="list-group-item list-group-item-danger">
+              {{ m.name }} ({{ m.item_id }}) - 庫存：{{ m.current_stock }} {{ m.unit }}，安全庫存：{{ m.safety_stock }}
+            </li>
+          </ul>
+        </div>
+
+        <div class="bar-chart-box">
+          <h5>📊 庫存分佈柱狀圖 (當前庫存與安全庫存並列)</h5>
+          <div class="chart-container">
+            <canvas id="barStockChart"></canvas>
+          </div>
+        </div>
+
+        <div class="pie-chart-box">
+          <h5>📊 3D立體庫存分佈餅狀圖 (依分類別)</h5>
+          <div class="chart-container">
+            <canvas id="pieStockChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="!token && !showLoginForm && !authErrorMessage" class="alert alert-warning text-center">
+      尚未取得授權，請聯絡系統管理員。
+    </div>
+
+    <!-- 新增：回首頁及回部門主管按鈕 -->
+    <div class="home-button-container d-flex justify-content-center gap-3">
+      <a href="login.html" class="btn btn-primary">
+        回首頁
+      </a>
+    </div>
+  </div>
+
+<script>
+  const { createApp } = Vue;
+  createApp({
+    data() {
+      return {
+        apiUrl: localStorage.getItem('apiUrl') || "http://10.10.7.66:5000/api",
+        token: localStorage.getItem('token') || "",
+        authErrorMessage: "",
+        showLoginForm: false,
+        loginForm: { username: "", password: "" },
+        loginLoading: false,
+        loginError: "",
+
+        materials: [],
+        lowStockMaterials: [],
+        loadingSummary: false,
+
+        barStockChart: null,
+        pieStockChart: null,
+
+        quickLoginCards: [
+          { label:'觀光科', username:'dep4T', password:'FSVS' },
+        ],
+
+        depNameMap: {
+          dep1T: '商經科',
+          dep2T: '會事科',
+          dep3T: '國貿科',
+          dep4T: '觀光科',
+          dep5T: '資處科',
+          dep6T: '機械科',
+          dep7T: '電圖科',
+          dep8T: '室設科',
+          dep9T: '家設科'
+        },
+
+        currentUsername: '', // 目前登入帳號
+      };
+    },
+    computed: {
+      currentUser() {
+        if (!this.token) return '';
+        try {
+          const payload = JSON.parse(atob(this.token.split('.')[1]));
+          this.currentUsername = payload.sub || '';
+          return this.currentUsername;
+        } catch {
+          return '';
+        }
+      },
+      currentDepName() {
+        return this.depNameMap[this.currentUsername] || '';
+      },
+      // 新增：過濾後的快速登入卡片（只顯示當前用戶對應的卡片）
+      filteredQuickLoginCards() {
+        // 如果已登入，只顯示當前用戶對應的科別按鈕
+        if (this.token && this.currentUsername) {
+          const userCard = this.quickLoginCards.find(card => card.username === this.currentUsername);
+          return userCard ? [userCard] : [];
+        }
+        // 如果未登入，顯示所有科別按鈕
+        return this.quickLoginCards;
+      }
+    },
+    watch: {
+      token(newToken) {
+        this.updateTitle();
+      },
+      currentUsername(newUsername) {
+        this.updateTitle();
+      }
+    },
+    mounted() {
+      this.updateTitle();
+      window.addEventListener('message', this.handleParentMessage);
+      
+      // 檢查是否已有登入token
+      if (this.token) {
+        if (this.isTokenExpired(this.token)) {
+          // token已過期，清除並顯示登入表單
+          this.token = "";
+          localStorage.removeItem('token');
+          this.showLoginForm = true;
+        } else {
+          // token有效，直接獲取資料
+          this.fetchMaterialsSummary().then(() => {
+            this.authErrorMessage = "";
+            this.showLoginForm = false;
+          }).catch(() => {
+            this.showLoginForm = true;
+          });
+        }
+      } else {
+        // 沒有token，顯示登入表單
+        this.showLoginForm = true;
+      }
+      
+      const observer = new MutationObserver(() => {
+        this.sendHeightToParent();
+      });
+      observer.observe(document.body, { childList: true, subtree: true, attributes: true });
+    },
+    beforeUnmount() {
+      window.removeEventListener('message', this.handleParentMessage);
+    },
+    methods: {
+      updateTitle() {
+        const dep = this.currentDepName;
+        if (dep) {
+          document.title = `${dep} 庫存管理 - 庫存摘要與分佈圖 (含3D立體餅狀圖)`;
+        } else {
+          document.title = `庫存管理 - 庫存摘要與分佈圖 (含3D立體餅狀圖)`;
+        }
+      },
+      isTokenExpired(token) {
+        try {
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          const now = Math.floor(Date.now() / 1000);
+          return payload.exp && payload.exp < now;
+        } catch {
+          return true;
+        }
+      },
+      logout() {
+        this.token = "";
+        localStorage.removeItem('token');
+        this.materials = [];
+        this.lowStockMaterials = [];
+        this.showLoginForm = true;
+        this.authErrorMessage = "";
+        if (this.barStockChart) {
+          this.barStockChart.destroy();
+          this.barStockChart = null;
+        }
+        if (this.pieStockChart) {
+          this.pieStockChart.destroy();
+          this.pieStockChart = null;
+        }
+        this.$nextTick(() => {
+          this.sendHeightToParent();
+          this.updateTitle();
+        });
+      },
+      handleParentMessage(event) {
+        if (event.origin === window.location.origin || event.origin === "null") {
+          if (event.data && (event.data.type === 'inventoryUpdated' || event.data.type === 'refreshInventory')) {
+            this.fetchMaterialsSummary(true);
+          }
+        }
+      },
+      sendHeightToParent() {
+        const height = document.documentElement.scrollHeight || document.body.scrollHeight;
+        window.parent.postMessage({ type: 'adjustHeight', height: height }, '*');
+      },
+      async tryAutoAuthOrLogin() {
+        try {
+          const token = await this.autoAuthorize();
+          if (token && !this.isTokenExpired(token)) {
+            this.token = token;
+            localStorage.setItem('token', token);
+            this.authErrorMessage = "";
+            this.showLoginForm = false;
+            await this.fetchMaterialsSummary();
+          } else {
+            this.token = "";
+            localStorage.removeItem('token');
+            this.showLoginForm = true;
+            this.authErrorMessage = "";
+            this.updateTitle();
+          }
+        } catch (e) {
+          this.token = "";
+          localStorage.removeItem('token');
+          this.showLoginForm = true;
+          this.authErrorMessage = "";
+          this.updateTitle();
+        }
+      },
+      async autoAuthorize() {
+        try {
+          const res = await axios.get(`${this.apiUrl}/auto-auth`);
+          if (res.data && res.data.access_token) {
+            return res.data.access_token;
+          }
+        } catch (e) {}
+        return null;
+      },
+      login() {
+        this.loginLoading = true;
+        this.loginError = "";
+        axios.post(`${this.apiUrl}/login`, {
+          username: this.loginForm.username,
+          password: this.loginForm.password
+        }).then(res => {
+          this.token = res.data.access_token;
+          localStorage.setItem('token', this.token);
+          this.authErrorMessage = "";
+          this.showLoginForm = false;
+          this.fetchMaterialsSummary();
+        }).catch(err => {
+          this.loginError = "登入失敗，請確認帳號密碼";
+          console.error("Login error:", err);
+        }).finally(() => {
+          this.loginLoading = false;
+          this.$nextTick(() => {
+            this.sendHeightToParent();
+            this.updateTitle();
+          });
+        });
+      },
+      async quickLogin(card) {
+        this.loginForm.username = card.username;
+        this.loginForm.password = card.password;
+        await this.login();
+      },
+      async fetchMaterialsSummary(forceReload = false) {
+        if (!this.token) return Promise.reject();
+        this.loadingSummary = true;
+        try {
+          const url = forceReload ? `${this.apiUrl}/materials?timestamp=${Date.now()}` : `${this.apiUrl}/materials`;
+          const res = await axios.get(url, {
+            headers: { Authorization: `Bearer ${this.token}` },
+          });
+          this.materials = res.data || [];
+          this.materials.forEach(m => {
+            m.current_stock = parseInt(m.current_stock) || 0;
+            m.safety_stock = parseInt(m.safety_stock) || 0;
+          });
+
+          this.lowStockMaterials = this.materials.filter(m => m.current_stock <= m.safety_stock);
+          this.renderCharts();
+          this.authErrorMessage = "";
+          this.showLoginForm = false;
+          this.loadingSummary = false;
+          this.$nextTick(() => {
+            this.sendHeightToParent();
+          });
+          return Promise.resolve();
+        } catch (e) {
+          if (e.response && e.response.status === 401) {
+            this.logout();
+            this.authErrorMessage = "授權已過期，請重新登入。";
+          } else {
+            this.authErrorMessage = "讀取物料資料失敗，請稍後再試。";
+          }
+          this.showLoginForm = true;
+          this.loadingSummary = false;
+          this.$nextTick(() => {
+            this.sendHeightToParent();
+          });
+          return Promise.reject();
+        }
+      },
+      renderCharts() {
+        this.renderBarChart();
+        this.renderPieChart3D();
+      },
+      renderBarChart() {
+        if (this.barStockChart) {
+          this.barStockChart.destroy();
+        }
+        const labels = this.materials.map(m => m.name);
+        const currentStockData = this.materials.map(m => m.current_stock);
+        const safetyStockData = this.materials.map(m => m.safety_stock);
+
+        const ctx = document.getElementById('barStockChart').getContext('2d');
+        this.barStockChart = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                label: '當前庫存',
+                data: currentStockData,
+                backgroundColor: 'rgba(75, 192, 192, 0.7)',
+                borderColor: 'rgba(75, 192, 192, 1)',
+                borderWidth: 1
+              },
+              {
+                label: '安全庫存',
+                data: safetyStockData,
+                backgroundColor: 'rgba(255, 159, 64, 0.7)',
+                borderColor: 'rgba(255, 159, 64, 1)',
+                borderWidth: 1
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            scales: {
+              y: {
+                beginAtZero: true,
+                ticks: {
+                  precision: 0
+                },
+                title: {
+                  display: true,
+                  text: '庫存數量'
+                }
+              },
+              x: {
+                title: {
+                  display: true,
+                  text: '物料名稱'
+                }
+              }
+            },
+            plugins: {
+              legend: { display: true, position: 'top' },
+              tooltip: {
+                callbacks: {
+                  label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y}`
+                }
+              }
+            }
+          }
+        });
+      },
+      renderPieChart3D() {
+        if (this.pieStockChart) {
+          this.pieStockChart.destroy();
+        }
+        const categoryMap = {};
+        this.materials.forEach(m => {
+          const currentStock = m.current_stock;
+          if (!isNaN(currentStock)) {
+            if (!categoryMap[m.category]) {
+              categoryMap[m.category] = 0;
+            }
+            categoryMap[m.category] += currentStock;
+          }
+        });
+        const labels = Object.keys(categoryMap);
+        const data = Object.values(categoryMap);
+
+        const baseColors = [
+          '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0',
+          '#9966FF', '#FF9F40', '#E7E9ED', '#71B37C',
+          '#F67019', '#00A6B4'
+        ];
+        const backgroundColors = baseColors.slice(0, labels.length).map(c => c);
+
+        const ctx = document.getElementById('pieStockChart').getContext('2d');
+        this.pieStockChart = new Chart(ctx, {
+          type: 'doughnut',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: '分類庫存比例',
+              data: data,
+              backgroundColor: backgroundColors,
+              borderColor: '#fff',
+              borderWidth: 2,
+              hoverOffset: 30,
+              offset: 10
+            }]
+          },
+          options: {
+            responsive: true,
+            cutout: '40%',
+            plugins: {
+              legend: {
+                position: 'right',
+                labels: {
+                  boxWidth: 20,
+                  padding: 10
+                }
+              },
+              tooltip: {
+                callbacks: {
+                  label: ctx => {
+                    const label = ctx.label || '';
+                    const value = ctx.parsed || 0;
+                    const total = ctx.dataset.data.reduce((sum, val) => sum + val, 0);
+                    const percent = total ? ((value / total) * 100).toFixed(1) : 0;
+                    return `${label}: ${value} (${percent}%)`;
+                  }
+                }
+              }
+            },
+            animation: {
+              animateRotate: true,
+              animateScale: true
+            }
+          },
+          plugins: [{
+            id: 'shadow',
+            beforeDraw(chart) {
+              const ctx = chart.ctx;
+              ctx.save();
+              ctx.shadowColor = 'rgba(0,0,0,0.25)';
+              ctx.shadowBlur = 15;
+              ctx.shadowOffsetX = 0;
+              ctx.shadowOffsetY = 5;
+              ctx.restore();
+            }
+          }]
+        });
+      }
+    }
+  }).mount('#app');
+</script>
+</body>
+</html>

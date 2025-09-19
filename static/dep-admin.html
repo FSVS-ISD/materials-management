@@ -1,0 +1,99 @@
+<!-- 抬頭 -->
+<h2 style="text-align: center; font-size: 2.8em; font-weight: bold; margin-top: 40px; margin-bottom: 30px; color: #2c3e50;">
+  部門主管功能
+</h2>
+
+<!-- 新增卡片式連結區塊 -->
+<div id="cardLinksContainer" style="max-width: 900px; margin: 0 auto 40px auto; display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;">
+  <a href="All-Department-Inventory-summary.html" class="card-link card-inventory-summary" aria-label="全校各科庫存摘要查詢">
+    <div class="card-content">
+      <h3>全校各科<span class="highlight-text">庫存摘要</span>查詢</h3>
+      <p>快速查看全校各科庫存狀況</p>
+    </div>
+  </a>
+  <a href="All-Department-report-center.html" class="card-link card-inventory-report" aria-label="全校各科庫存報表查詢">
+    <div class="card-content">
+      <h3>全校各科<span class="highlight-text">庫存報表</span>查詢</h3>
+      <p>進入完整報表中心，查詢各類報表</p>
+    </div>
+  </a>
+</div>
+
+<!-- 回首頁按鈕 -->
+<div style="text-align: center; margin-bottom: 40px;">
+  <a href="login.html" aria-label="回首頁">
+    <button type="button" style="
+      background-color:#0063db;
+      color: white;
+      border: none;
+      padding: 12px 30px;
+      font-size: 18px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    " onmouseover="this.style.backgroundColor='#00008b'" onmouseout="this.style.backgroundColor='#0063db'">
+      回首頁
+    </button>
+  </a>
+</div>
+
+<style>
+  .card-link {
+    display: block;
+    width: 280px;
+    padding: 20px;
+    color: white;
+    border-radius: 10px;
+    text-decoration: none;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    transition: background-color 0.3s ease, box-shadow 0.3s ease;
+  }
+  /* 第一張卡片背景色 */
+  .card-inventory-summary {
+    background-color: #27ae60; /* 綠色 */
+    box-shadow: 0 4px 10px rgba(39, 174, 96, 0.6);
+  }
+  .card-inventory-summary:hover,
+  .card-inventory-summary:focus {
+    background-color: #1e8449;
+    box-shadow: 0 6px 14px rgba(30, 132, 73, 0.8);
+    outline: none;
+  }
+  /* 第二張卡片背景色 */
+  .card-inventory-report {
+    background-color: #e67e22; /* 橘色 */
+    box-shadow: 0 4px 10px rgba(230, 126, 34, 0.6);
+  }
+  .card-inventory-report:hover,
+  .card-inventory-report:focus {
+    background-color: #ca6f1e;
+    box-shadow: 0 6px 14px rgba(202, 111, 30, 0.8);
+    outline: none;
+  }
+
+  .card-content h3 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 1.4em; /* 字體加大 */
+  }
+  /* 庫存摘要和庫存報表文字加大 */
+  .highlight-text {
+    font-size: 1.6em;
+    font-weight: bold;
+  }
+  .card-content p {
+    margin: 0;
+    font-size: 1em;
+    opacity: 0.85;
+  }
+  @media (max-width: 600px) {
+    #cardLinksContainer {
+      flex-direction: column;
+      align-items: center;
+    }
+    .card-link {
+      width: 90%;
+      max-width: 320px;
+    }
+  }
+</style>

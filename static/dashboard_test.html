@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <title>系統儀表板</title>
+</head>
+<body>
+  <h1>系統儀表板</h1>
+  <p>目前物料總數: <span id="total-count">--</span></p>
+  <p>低庫存物料: <span id="low-stock-count">--</span></p>
+  <p id="error-msg" style="color:red; display:none;"></p>
+
+  <script>
+    // 模擬登入，使用固定帳密呼叫 /api/login 取得 token
+    async function login() {
+      const username = 'jans';  // 請改成你的帳號
+      const password = '5951';  // 請改成你的密碼
+
+      const response = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+
+      if (!response.ok) {
+        throw new Error('登入失敗，請檢查帳號密碼');
+      }
+
+      const data = await response.json();
+
+      if (!data.access_token) {
+        throw new Error('登入回傳沒有 access_token');
+      }
+
+      return data.access_token;
+    }
+
+    async function updateDashboard() {
+      const totalCountElem = document.getElementById('total-count');
+      const lowStockCountElem = document.getElementById('low-stock-count');
+      const errorMsgElem = document.getElementById('error-msg');
+
+      try {
+        errorMsgElem.style.display = 'none';
+
+        // 先登入取得 token
+        const token = await login();
+
+        // 用 token 呼叫 API
+        const response = await fetch('/api/materials', {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error(`API 錯誤，狀態碼: ${response.status}`);
+        }
+
+        const materials = await response.json();
+
+        if (!Array.isArray(materials)) {
+          throw new Error('API 回傳資料格式非陣列');
+        }
+
+        const totalCount = materials.length;
+        const lowStockCount = materials.filter(m => {
+          const current = parseInt(m.current_stock) || 0;
+          const safety = parseInt(m.safety_stock) || 0;
+          return current < safety;
+        }).length;
+
+        totalCountElem.textContent = totalCount;
+        lowStockCountElem.textContent = lowStockCount;
+
+      } catch (error) {
+        errorMsgElem.textContent = '錯誤: ' + error.message;
+        errorMsgElem.style.display = 'block';
+        totalCountElem.textContent = '--';
+        lowStockCountElem.textContent = '--';
+      }
+    }
+
+    window.onload = updateDashboard;
+  </script>
+</body>
+</html>

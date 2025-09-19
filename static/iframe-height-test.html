@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>iframe 高度調整測試</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 1rem;
+            background-color: #f0f0f0;
+        }
+        .content {
+            background: white;
+            padding: 1rem;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            max-width: 600px;
+            margin: auto;
+        }
+        button {
+            margin-top: 1rem;
+            padding: 0.5rem 1rem;
+            font-size: 1rem;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            background-color: #4a6fdc;
+            color: white;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #3b5bbd;
+        }
+    </style>
+</head>
+<body>
+    <div class="content">
+        <h2>iframe 高度調整測試頁面</h2>
+        <p>點擊按鈕會增加內容高度，並通知父頁面調整 iframe 高度。</p>
+        <div id="dynamicContent" style="background:#e0e0ff; padding:10px; margin-top:10px; border-radius:4px;">
+            <p>初始內容高度約 100px。</p>
+        </div>
+        <button id="addContentBtn">增加內容高度</button>
+    </div>
+
+    <script>
+        const dynamicContent = document.getElementById('dynamicContent');
+        const addContentBtn = document.getElementById('addContentBtn');
+
+        // 傳送高度給父頁面
+        function sendHeightToParent() {
+            const height = document.body.scrollHeight;
+            console.log('sendHeightToParent:', height);
+            window.parent.postMessage({ type: 'adjustHeight', height }, '*');
+        }
+
+        // 初次載入時發送高度
+        window.addEventListener('load', () => {
+            sendHeightToParent();
+        });
+
+        // 按鈕點擊增加內容高度並通知父頁面
+        addContentBtn.addEventListener('click', () => {
+            const newPara = document.createElement('p');
+            newPara.textContent = '新增一段內容，讓高度增加。';
+            dynamicContent.appendChild(newPara);
+            sendHeightToParent();
+        });
+
+        // 監聽父頁面傳來的訊息（例如登出）
+        window.addEventListener('message', (event) => {
+            if (event.data && event.data.type === 'logout') {
+                console.log('收到登出訊息，清除資料');
+                // 在此可清除授權或重置狀態
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>系統儀表板</title>
+    <style>
+        :host, body {
+            font-family: 'Segoe UI', 'Microsoft JhengHei', Arial, sans-serif;
+            background-color: #ffffff;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+            box-sizing: border-box;
+        }
+        .container {
+            width: 100%;
+            max-width: 100%;
+            background-color: #ffffff;
+            padding: 10px;
+            text-align: center;
+        }
+        header h1 {
+            color: #0056b3;
+            margin-bottom: 30px;
+            font-size: 2.2em;
+            border-bottom: 2px solid #0056b3;
+            padding-bottom: 10px;
+        }
+        .stats-display {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-around;
+            background-color: #e9ecef;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            gap: 15px;
+        }
+        .stat-item {
+            font-size: 1.6em;
+            color: #495057;
+        }
+        .stat-item span {
+            font-weight: bold;
+            color: #007bff;
+            margin-left: 10px;
+        }
+        .stat-item span.text-danger {
+            color: #dc3545;
+        }
+        .spacer {
+            height: 20px;
+        }
+        #error-message {
+            margin-bottom: 20px;
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #dc3545;
+            background-color: #ffebee;
+            border: 2px solid #dc3545;
+            border-radius: 8px;
+            padding: 12px 20px;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            display: none;
+        }
+        .button-grid {
+            display: flex;
+            flex-wrap: nowrap;
+            justify-content: center;
+            gap: 12px;
+            max-width: 100%;
+            overflow-x: auto;
+            padding-bottom: 5px;
+            margin-bottom: 10px;
+        }
+        .dashboard-button {
+            flex: 0 0 auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background-color: #007bff;
+            color: white;
+            padding: 6px 10px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 0.85em;
+            font-weight: 500;
+            transition: background-color 0.2s, transform 0.2s;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+            cursor: pointer;
+            min-height: 55px;
+            min-width: 90px;
+            text-align: center;
+            white-space: nowrap;
+            user-select: none;
+        }
+        .dashboard-button:hover {
+            background-color: #0056b3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+        .dashboard-button i {
+            font-size: 1.3em;
+            margin-bottom: 3px;
+        }
+        @media (max-width: 480px) {
+            .button-grid {
+                gap: 8px;
+                padding-bottom: 4px;
+            }
+            .dashboard-button {
+                min-width: 75px;
+                min-height: 50px;
+                font-size: 0.8em;
+                padding: 5px 8px;
+            }
+            .dashboard-button i {
+                font-size: 1.1em;
+                margin-bottom: 2px;
+            }
+        }
+        #confirmDialogOverlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.4);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        #confirmDialog {
+            background: #fff;
+            border-radius: 10px;
+            width: 320px;
+            max-width: 90%;
+            padding: 20px 25px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+            font-size: 1em;
+            color: #333;
+            text-align: center;
+            user-select: none;
+        }
+        #confirmDialog p {
+            margin-bottom: 25px;
+            font-weight: 600;
+        }
+        #confirmDialog .btn-group {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+        }
+        #confirmDialog button {
+            flex: 1;
+            padding: 8px 0;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 1em;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            user-select: none;
+        }
+        #confirmDialog button.confirm-btn {
+            background-color: #007bff;
+            color: white;
+        }
+        #confirmDialog button.confirm-btn:hover {
+            background-color: #0056b3;
+        }
+        #confirmDialog button.cancel-btn {
+            background-color: #e0e0e0;
+            color: #555;
+        }
+        #confirmDialog button.cancel-btn:hover {
+            background-color: #c6c6c6;
+        }
+        /* 載入動畫 */
+        .loader {
+            display: none;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet" />
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>系統儀表板</h1>
+        </header>
+
+        <!-- 錯誤訊息 -->
+        <div id="error-message" role="alert" aria-live="assertive"></div>
+
+        <!-- 載入動畫 -->
+        <div id="loading-spinner" class="loader" role="status" aria-label="資料載入中"></div>
+
+        <!-- 儀表板統計區塊 -->
+        <main>
+            <section class="stats-display" aria-live="polite">
+                <div class="stat-item">目前物料總數: <span id="total-materials-count">讀取中...</span></div>
+                <div class="stat-item">低庫存物料: <span id="low-stock-count" class="text-danger">讀取中...</span></div>
+            </section>
+            <div class="spacer"></div>
+
+            <div class="button-grid" tabindex="0" aria-label="系統功能按鈕列">
+                <a class="dashboard-button" onclick="navigateToView('materials')" role="button" tabindex="0">
+                    <i class="bi bi-box-seam" aria-hidden="true"></i>
+                    <span>物料管理</span>
+                </a>
+                <a class="dashboard-button" onclick="navigateToView('in-records')" role="button" tabindex="0">
+                    <i class="bi bi-box-arrow-in-down-right" aria-hidden="true"></i>
+                    <span>出入庫管理 (手動)</span>
+                </a>
+                <a class="dashboard-button" onclick="navigateToView('in-barcode')" role="button" tabindex="0">
+                    <i class="bi bi-upc-scan" aria-hidden="true"></i>
+                    <span>出入庫管理 (掃碼)</span>
+                </a>
+                <a class="dashboard-button" onclick="navigateToView('inventory')" role="button" tabindex="0">
+                    <i class="bi bi-clipboard-check" aria-hidden="true"></i>
+                    <span>庫存管理</span>
+                </a>
+                <a class="dashboard-button" onclick="navigateToView('fuzzy-sr')" role="button" tabindex="0">
+                    <i class="bi bi-search" aria-hidden="true"></i>
+                    <span>查詢物料</span>
+                </a>
+                <a class="dashboard-button" onclick="navigateToView('reports')" role="button" tabindex="0">
+                    <i class="bi bi-file-earmark-bar-graph" aria-hidden="true"></i>
+                    <span>報表中心</span>
+                </a>
+                <!-- 備份資料庫功能按鈕 -->
+                <a class="dashboard-button" onclick="confirmBackup()" role="button" tabindex="0">
+                    <i class="bi bi-hdd-network" aria-hidden="true"></i>
+                    <span>備份資料庫</span>
+                </a>
+            </div>
+        </main>
+    </div>
+
+    <!-- 確認對話框 -->
+    <div id="confirmDialogOverlay" role="dialog" aria-modal="true" aria-labelledby="confirmDialogTitle" aria-describedby="confirmDialogDesc">
+        <div id="confirmDialog">
+            <p id="confirmDialogDesc">確定要備份資料庫嗎？</p>
+            <div class="btn-group">
+                <button class="confirm-btn" id="confirmYesBtn">確定</button>
+                <button class="cancel-btn" id="confirmNoBtn">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+      // 取得父頁面 localStorage 中的使用者 token (改為讀取 apiKey)
+      function getUserToken() {
+        try {
+          const token = window.parent.localStorage.getItem('apiKey');
+          return token || null;
+        } catch (e) {
+          console.error('無法取得父頁面使用者 token:', e);
+          return null;
+        }
+      }
+
+      // 顯示錯誤訊息
+      function showError(msg) {
+        const errorElem = document.getElementById('error-message');
+        if (errorElem) {
+          errorElem.textContent = msg;
+          errorElem.style.display = msg ? 'block' : 'none';
+        }
+      }
+
+      // 顯示載入動畫
+      function setLoading(isLoading) {
+        const spinner = document.getElementById('loading-spinner');
+        if (spinner) {
+          spinner.style.display = isLoading ? 'block' : 'none';
+        }
+      }
+
+      // 呼叫物料 API 並更新頁面
+      async function fetchMaterials(token) {
+        setLoading(true);
+        showError('');
+        const totalCountElem = document.getElementById('total-materials-count');
+        const lowStockCountElem = document.getElementById('low-stock-count');
+
+        if (!token) {
+          showError('尚未登入，請先回主頁登入');
+          totalCountElem.textContent = '--';
+          lowStockCountElem.textContent = '--';
+          setLoading(false);
+          return;
+        }
+
+        try {
+          const response = await fetch('/api/materials', {
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            }
+          });
+
+          if (!response.ok) {
+            if (response.status === 401) {
+              showError('授權失效，請重新登入');
+            } else {
+              showError(`取得物料資料失敗，狀態碼: ${response.status}`);
+            }
+            totalCountElem.textContent = '--';
+            lowStockCountElem.textContent = '--';
+            setLoading(false);
+            return;
+          }
+
+          const materials = await response.json();
+
+          if (!Array.isArray(materials)) {
+            showError('API 回傳資料格式錯誤');
+            totalCountElem.textContent = '--';
+            lowStockCountElem.textContent = '--';
+            setLoading(false);
+            return;
+          }
+
+          const totalCount = materials.length;
+          const lowStockCount = materials.filter(m => {
+            const current = parseInt(m.current_stock) || 0;
+            const safety = parseInt(m.safety_stock) || 0;
+            return current < safety;
+          }).length;
+
+          totalCountElem.textContent = totalCount;
+          lowStockCountElem.textContent = lowStockCount;
+
+        } catch (error) {
+          showError('取得物料資料錯誤：' + error.message);
+          totalCountElem.textContent = '--';
+          lowStockCountElem.textContent = '--';
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      // 初始化載入
+      function init() {
+        const token = getUserToken();
+        fetchMaterials(token);
+
+        // 若需要定時刷新，可取消註解以下程式碼
+        // setInterval(() => {
+        //   const newToken = getUserToken();
+        //   fetchMaterials(newToken);
+        // }, 300000); // 5分鐘
+      }
+
+      window.addEventListener('load', init);
+
+      // 導航切換功能
+      function navigateToView(view) {
+        if (window.parent) {
+          window.parent.postMessage({ type: 'switchView', view: view }, window.location.origin);
+        }
+      }
+
+      // 備份資料庫功能
+      async function backupDatabase() {
+        const token = getUserToken();
+        if (!token) {
+          showError('尚未登入，無法備份資料庫');
+          return;
+        }
+        showError('');
+        setLoading(true);
+        try {
+          const response = await fetch('/api/backup', {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          if (!response.ok) {
+            if (response.status === 401) {
+              showError('授權失效，請重新登入');
+            } else {
+              showError(`備份資料庫失敗，狀態碼: ${response.status}`);
+            }
+            return;
+          }
+          // 取得檔案 blob
+          const blob = await response.blob();
+          // 從 Content-Disposition 擷取檔名 (若需要)
+          const disposition = response.headers.get('Content-Disposition');
+          let filename = 'database_backup.db';
+          if (disposition && disposition.indexOf('filename=') !== -1) {
+            const match = disposition.match(/filename="?(.+)"?/);
+            if (match.length > 1) filename = match[1];
+          }
+          // 建立下載連結並觸發下載
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          window.URL.revokeObjectURL(url);
+        } catch (error) {
+          showError('備份資料庫錯誤：' + error.message);
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      // 確認對話框控制
+      const confirmDialogOverlay = document.getElementById('confirmDialogOverlay');
+      const confirmYesBtn = document.getElementById('confirmYesBtn');
+      const confirmNoBtn = document.getElementById('confirmNoBtn');
+
+      function confirmBackup() {
+        confirmDialogOverlay.style.display = 'flex';
+        confirmYesBtn.focus();
+      }
+
+      function hideConfirmDialog() {
+        confirmDialogOverlay.style.display = 'none';
+      }
+
+      confirmYesBtn.addEventListener('click', () => {
+        hideConfirmDialog();
+        backupDatabase();
+      });
+
+      confirmNoBtn.addEventListener('click', () => {
+        hideConfirmDialog();
+      });
+
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && confirmDialogOverlay.style.display === 'flex') {
+          hideConfirmDialog();
+        }
+      });
+    </script>
+</body>
+</html>

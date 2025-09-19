@@ -1,0 +1,264 @@
+<!DOCTYPE html> 
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>校園物料管理系統</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/npm/vue@3.2.47/dist/vue.global.prod.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+</head>
+<body class="bg-light">
+<div id="app" class="container py-4">
+  <h2 class="text-center mb-4">🏫 校園物料管理系統</h2>
+
+  <!-- 登入/註冊表單切換 -->
+  <div v-if="!token" class="card mx-auto" style="max-width: 400px;">
+    <div class="card-body">
+      <h5 class="card-title">
+        {{ isRegister ? '📝 註冊帳號' : '🔐 登入系統' }}
+      </h5>
+
+      <!-- 登入表單 -->
+      <div v-if="!isRegister">
+        <input v-model="username" placeholder="帳號" class="form-control mb-2" />
+        <input v-model="password" placeholder="密碼" type="password" class="form-control mb-2" />
+        <button @click="login" class="btn btn-primary w-100">登入</button>
+        <div class="text-danger mt-2" v-if="loginError">{{ loginError }}</div>
+      </div>
+
+      <!-- 註冊表單 -->
+      <div v-else>
+        <input v-model="username" placeholder="帳號" class="form-control mb-2" />
+        <input v-model="password" placeholder="密碼" type="password" class="form-control mb-2" />
+        <input v-model="confirmPassword" placeholder="確認密碼" type="password" class="form-control mb-2" />
+        <button @click="register" class="btn btn-success w-100">註冊</button>
+        <div class="text-danger mt-2" v-if="registerError">{{ registerError }}</div>
+        <div class="text-success mt-2" v-if="registerSuccess">{{ registerSuccess }}</div>
+      </div>
+
+      <button @click="toggleForm" class="btn btn-link mt-3 w-100">
+        {{ isRegister ? "← 返回登入" : "沒有帳號？註冊" }}
+      </button>
+    </div>
+  </div>
+
+  <!-- 登入後主畫面 -->
+  <div v-else>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h5 class="mb-0">📦 物料清單</h5>
+      <div>
+        <button @click="fetchMaterials" class="btn btn-outline-secondary btn-sm me-2">重新載入</button>
+        <button @click="logout" class="btn btn-outline-danger btn-sm">登出</button>
+      </div>
+    </div>
+
+    <!-- 新增/編輯表單 -->
+    <div class="card mb-4">
+      <div class="card-body">
+        <h5 class="card-title">{{ isEditing ? '✏️ 編輯物料' : '➕ 新增物料' }}</h5>
+        <div class="row g-2">
+          <div class="col-md-4">
+            <input v-model="form.item_id" :readonly="isEditing" required class="form-control" placeholder="物料編號">
+          </div>
+          <div class="col-md-4">
+            <input v-model="form.name" required class="form-control" placeholder="名稱">
+          </div>
+          <div class="col-md-4">
+            <input v-model="form.unit" required class="form-control" placeholder="單位">
+          </div>
+          <div class="col-md-4">
+            <input v-model="form.category" required class="form-control" placeholder="分類">
+          </div>
+          <div class="col-md-4">
+            <input v-model="form.safety_stock" required type="number" class="form-control" placeholder="安全庫存">
+          </div>
+          <div class="col-md-4">
+            <input v-model="form.notes" class="form-control" placeholder="備註">
+          </div>
+        </div>
+        <button @click="submitMaterial" class="btn btn-success mt-3">{{ isEditing ? '更新' : '新增' }}</button>
+        <button v-if="isEditing" @click="cancelEdit" class="btn btn-secondary mt-3 ms-2">取消編輯</button>
+        <div class="text-success mt-2" v-if="submitMessage">{{ submitMessage }}</div>
+      </div>
+    </div>
+
+    <!-- 物料表格 -->
+    <div v-if="materials.length === 0" class="alert alert-info">目前無物料資料</div>
+    <div v-else class="table-responsive">
+      <table class="table table-bordered align-middle">
+        <thead class="table-light">
+          <tr><th>編號</th><th>名稱</th><th>分類</th><th>庫存</th><th>單位</th><th>安全庫存</th><th>備註</th><th>操作</th></tr>
+        </thead>
+        <tbody>
+          <tr v-for="item in materials" :key="item.item_id">
+            <td>{{ item.item_id }}</td><td>{{ item.name }}</td><td>{{ item.category }}</td>
+            <td>{{ item.current_stock }}</td><td>{{ item.unit }}</td><td>{{ item.safety_stock }}</td><td>{{ item.notes }}</td>
+            <td>
+              <button @click="editMaterial(item)" class="btn btn-sm btn-warning me-1">編輯</button>
+              <button @click="confirmDelete(item)" class="btn btn-sm btn-danger">刪除</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 刪除確認 Modal -->
+  <div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">刪除確認</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          確定要刪除物料「{{ deleteTarget?.name }}」？
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+          <button type="button" class="btn btn-danger" @click="deleteMaterial">刪除</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const { createApp } = Vue;
+createApp({
+  data() {
+    return {
+      api: "http://127.0.0.1:5000",
+      username: "",
+      password: "",
+      confirmPassword: "",
+      token: localStorage.getItem("token") || "",
+      loginError: "",
+      registerError: "",
+      registerSuccess: "",
+      materials: [],
+      submitMessage: "",
+      isRegister: false,
+      isEditing: false,
+      deleteTarget: null,
+      form: { item_id: "", name: "", unit: "", category: "", safety_stock: 0, notes: "" },
+    };
+  },
+  mounted() {
+    if (this.token) this.fetchMaterials();
+  },
+  methods: {
+    toggleForm() {
+      this.isRegister = !this.isRegister;
+      this.loginError = "";
+      this.registerError = "";
+      this.registerSuccess = "";
+      this.username = "";
+      this.password = "";
+      this.confirmPassword = "";
+    },
+    async login() {
+      this.loginError = "";
+      if (!this.username || !this.password) {
+        this.loginError = "請輸入帳號和密碼";
+        return;
+      }
+      try {
+        const res = await axios.post(`${this.api}/api/login`, {
+          username: this.username,
+          password: this.password
+        });
+        this.token = res.data.access_token;
+        localStorage.setItem("token", this.token);
+        this.fetchMaterials();
+      } catch (err) {
+        this.loginError = "登入失敗，請確認帳密";
+      }
+    },
+    async register() {
+      this.registerError = "";
+      this.registerSuccess = "";
+      if (!this.username || !this.password || !this.confirmPassword) {
+        this.registerError = "請填寫所有欄位";
+        return;
+      }
+      if (this.password !== this.confirmPassword) {
+        this.registerError = "密碼與確認密碼不符";
+        return;
+      }
+      try {
+        await axios.post(`${this.api}/api/register`, {
+          username: this.username,
+          password: this.password
+        });
+        this.registerSuccess = "註冊成功，請登入";
+        setTimeout(() => {
+          this.toggleForm();
+        }, 2000);
+      } catch (err) {
+        this.registerError = "註冊失敗：" + (err.response?.data?.error || err.message);
+      }
+    },
+    logout() {
+      this.token = "";
+      localStorage.removeItem("token");
+    },
+    async fetchMaterials() {
+      try {
+        const res = await axios.get(`${this.api}/api/materials`, {
+          headers: { Authorization: `Bearer ${this.token}` }
+        });
+        this.materials = res.data;
+      } catch (err) {
+        console.error("資料載入失敗", err);
+      }
+    },
+    async submitMaterial() {
+      try {
+        if (this.isEditing) {
+          await axios.put(`${this.api}/api/materials/${this.form.item_id}`, this.form, {
+            headers: { Authorization: `Bearer ${this.token}` }
+          });
+        } else {
+          await axios.post(`${this.api}/api/materials`, this.form, {
+            headers: { Authorization: `Bearer ${this.token}` }
+          });
+        }
+        this.submitMessage = this.isEditing ? "✅ 更新成功！" : "✅ 新增成功！";
+        this.fetchMaterials();
+        this.cancelEdit();
+      } catch (err) {
+        this.submitMessage = "❌ 操作失敗：" + (err.response?.data?.error || err.message);
+      }
+    },
+    editMaterial(item) {
+      this.form = { ...item };
+      this.isEditing = true;
+    },
+    cancelEdit() {
+      this.isEditing = false;
+      this.form = { item_id: "", name: "", unit: "", category: "", safety_stock: 0, notes: "" };
+    },
+    confirmDelete(item) {
+      this.deleteTarget = item;
+      new bootstrap.Modal(document.getElementById('deleteModal')).show();
+    },
+    async deleteMaterial() {
+      try {
+        await axios.delete(`${this.api}/api/materials/${this.deleteTarget.item_id}`, {
+          headers: { Authorization: `Bearer ${this.token}` }
+        });
+        this.fetchMaterials();
+        this.deleteTarget = null;
+        bootstrap.Modal.getInstance(document.getElementById('deleteModal')).hide();
+      } catch (err) {
+        alert("刪除失敗: " + (err.response?.data?.error || err.message));
+      }
+    }
+  }
+}).mount("#app");
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

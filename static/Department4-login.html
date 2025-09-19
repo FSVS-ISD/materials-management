@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>校園物料管理系統</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios@1.1.3/dist/axios.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #4a6fdc;
+            --secondary-color: #6c757d;
+            --success-color: #28a745;
+            --warning-color: #ffc107;
+            --danger-color: #dc3545;
+            --light-bg: #f8f9fa;
+        }
+        body {
+            background-color: #f5f7fb;
+            font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+        }
+        .navbar-brand {
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+        .list-group-item.active {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+        .card {
+            border-radius: 0.75rem;
+            box-shadow: 0 0.125rem 0.75rem rgba(0, 0, 0, 0.08);
+            border: none;
+            margin-bottom: 1.5rem;
+        }
+        .card-header {
+            font-weight: 600;
+            border-radius: 0.75rem 0.75rem 0 0 !important;
+        }
+        .stat-card {
+            border-radius: 0.75rem;
+            transition: transform 0.3s;
+            height: 100%;
+        }
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        .barcode-preview {
+            cursor: pointer;
+            transition: transform 0.3s;
+            height: 40px;
+            object-fit: contain;
+        }
+        .barcode-preview:hover {
+            transform: scale(1.1);
+        }
+        .table-hover tbody tr:hover {
+            background-color: rgba(74, 111, 220, 0.08);
+        }
+        .low-stock {
+            color: var(--danger-color);
+            font-weight: 600;
+        }
+        .api-status {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1050;
+            border-radius: 0.75rem;
+        }
+        .material-badge {
+            font-size: 0.85rem;
+            font-weight: 500;
+            padding: 0.4em 0.7em;
+        }
+        .action-btn {
+            width: 32px;
+            height: 32px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+        }
+        .search-box {
+            border-radius: 2rem;
+            overflow: hidden;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+        }
+        .pagination .page-link {
+            border-radius: 0.5rem !important;
+            margin: 0 3px;
+        }
+        .toast {
+            border-radius: 0.75rem;
+        }
+        footer {
+            padding-top: 10px;
+            font-size: 0.9em;
+            color: #6c757d;
+            text-align: center;
+        }
+        footer p {
+            margin: 1px 0;
+        }
+        /* 新增：回首頁按鈕樣式 */
+        .home-button-container {
+          text-align: center;
+          margin-top: 30px;
+          padding: 20px 0;
+        }
+        /* 登入/註冊頁面專用 */
+        #loginPage {
+            height: 100vh;
+            background: #f5f7fb;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+        #loginCard {
+            width: 360px;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 0.25rem 1rem rgba(0,0,0,0.1);
+            background: white;
+            margin-bottom: 1rem;
+        }
+        .pointer {
+            cursor: pointer;
+        }
+        /* API連線測試區塊 */
+        #connectionTest {
+            width: 360px;
+            padding: 1rem 1.5rem;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            background-color: #fff;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+        #connectionTest h4 {
+            margin-bottom: 1rem;
+            text-align: center;
+            color: var(--primary-color);
+        }
+        #connectionTest input[type="text"] {
+            width: 100%;
+            padding: 8px 10px;
+            margin: 6px 0 12px 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+        #connectionTest button {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 4px;
+            background-color: var(--primary-color);
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        #connectionTest button:hover {
+            background-color: #3b5bbd;
+        }
+        #connectionTest .result {
+            margin-top: 12px;
+            font-size: 1.1rem;
+            text-align: center;
+            min-height: 1.5em;
+        }
+        /* iframe 自動調整容器 - 調整樣式與最大高度 */
+        #iframeContainer {
+            width: 100%;
+            border: 1px solid #ddd;
+            border-radius: 0.5rem;
+            overflow: hidden; /* 改回 hidden，由 JS 控制高度 */
+            background: white;
+            box-shadow: 0 0.125rem 0.75rem rgba(0, 0, 0, 0.08);
+            min-height: 400px;
+            max-height: 2000px; /* 放寬最大高度限制，調整到2000 */
+            transition: height 0.3s ease;
+        }
+        iframe {
+            width: 100%;
+            border: none;
+            display: block;
+            min-height: 400px;
+            transition: height 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 登入/註冊頁面 -->
+        <div v-if="!isAuthenticated" id="loginPage">
+            <div id="loginCard">
+                <h3 class="text-center mb-3">{{ isRegisterMode ? '註冊帳號' : '使用者登入' }}</h3>
+                <form @submit.prevent="isRegisterMode ? register() : login()">
+                    <div class="mb-3">
+                        <input v-model="authForm.username" type="text" class="form-control" placeholder="帳號" required />
+                    </div>
+                    <div class="mb-3">
+                        <input v-model="authForm.password" type="password" class="form-control" placeholder="密碼" required />
+                    </div>
+                    <div class="d-grid mb-2">
+                        <button type="submit" class="btn btn-primary" :disabled="authLoading">
+                            {{ authLoading ? (isRegisterMode ? '註冊中...' : '登入中...') : (isRegisterMode ? '註冊' : '登入') }}
+                        </button>
+                    </div>
+                </form>
+                <div class="text-center mb-3">
+                    <a href="#" @click.prevent="toggleAuthMode" class="pointer">
+                        {{ isRegisterMode ? '已有帳號？點此登入' : '沒有帳號？點此註冊' }}
+                    </a>
+                </div>
+                <div v-if="authError" class="alert alert-danger mt-3">{{ authError }}</div>
+                <div v-if="authSuccess" class="alert alert-success mt-3">{{ authSuccess }}</div>
+            </div>
+
+            <!-- 新增：回首頁按鈕 -->
+            <div class="home-button-container">
+              <a href="login.html" class="btn btn-primary">
+                <i class="bi bi-house-door"></i> 回首頁
+              </a>
+            </div>
+
+            <!-- 快速登入卡片 -->
+            <div class="mt-4" style="max-width:360px; margin:auto;">
+                <h5 class="text-center mb-3">快速登入帳號</h5>
+                <div class="d-flex flex-wrap justify-content-center gap-2">
+                    <button v-for="card in quickLoginCards" :key="card.username" type="button" class="btn btn-outline-primary" 
+                        @click="quickLogin(card)">
+                        {{ card.label }}
+                    </button>
+                </div>
+            </div>
+
+            <!-- API連線測試區塊 -->
+            <div id="connectionTest">
+                <h4>後端 API 連線測試</h4>
+                <input type="text" v-model="testApiUrl" placeholder="API 網址，例如 http://10.10.7.66:5000/api" />
+                <input type="text" v-model="testApiKey" placeholder="API 密鑰 (Token)" />
+                <button @click="testConnection" :disabled="testLoading">
+                    {{ testLoading ? '測試中...' : '測試連線' }}
+                </button>
+                <div class="result" :style="{ color: testResultColor }">{{ testResultMessage }}</div>
+            </div>
+        </div>
+
+        <!-- 主系統頁面 -->
+        <div v-else class="container-fluid">
+            <!-- 導航欄 -->
+            <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+                <div class="container">
+                    <a class="navbar-brand d-flex align-items-center" href="#">
+                        <div class="bg-white rounded-circle d-flex align-items-center justify-content-center me-2" style="width: 40px; height: 40px;">
+                            <i class="bi bi-boxes-fill text-primary fs-5"></i>
+                        </div>
+                        校園物料管理系統 v3.2
+                    </a>
+                    <div class="d-flex align-items-center">
+                        <span class="badge bg-light text-primary me-3">最後更新: {{ lastUpdated }}</span>
+                        <div class="d-flex align-items-center text-white me-3">
+                            <i class="bi bi-person-circle me-2"></i>
+                            <span><span style="font-size: 1.5em; color: #ffffff;">{{ getDepartmentName(authForm.username) }}</span>
+                        </div>
+                        <button class="btn btn-outline-light btn-sm" @click="logout">
+                            <i class="bi bi-box-arrow-right"></i> 登出
+                        </button>
+                    </div>
+                </div>
+            </nav>
+
+            <!-- 主內容區 -->
+            <div class="row mt-4">
+                <!-- 側邊欄 -->
+                <div class="col-md-3">
+                    <div class="list-group">
+                        <a href="#" class="list-group-item list-group-item-action d-flex align-items-center"
+                           :class="{ active: sideMenuView === 'dashboard' }"
+                           @click.prevent="switchSideMenu('dashboard')">
+                            <i class="bi bi-speedometer2 me-2"></i> 儀表板
+                        </a>
+                        <a href="#" class="list-group-item list-group-item-action d-flex align-items-center"
+                           :class="{ active: sideMenuView === 'materials' }"
+                           @click.prevent="switchSideMenu('materials')">
+                            <i class="bi bi-box-seam me-2"></i> 物料管理
+                        </a>
+                        <a href="#" class="list-group-item list-group-item-action d-flex align-items-center"
+                           :class="{ active: sideMenuView === 'in-records' }"
+                           @click.prevent="switchSideMenu('in-records')">
+                            <i class="bi bi-box-arrow-in-down-right me-2"></i> 出入庫管理(手動)
+                        </a>
+                        <a href="#" class="list-group-item list-group-item-action d-flex align-items-center"
+                           :class="{ active: sideMenuView === 'in-barcode' }"
+                           @click.prevent="switchSideMenu('in-barcode')">
+                            <i class="bi bi-upc-scan me-2"></i> 出入庫管理(掃碼)
+                        </a>
+                        <a href="#" class="list-group-item list-group-item-action d-flex align-items-center"
+                           :class="{ active: sideMenuView === 'inventory' }"
+                           @click.prevent="switchSideMenu('inventory')">
+                            <i class="bi bi-clipboard-check me-2"></i> 庫存管理
+                        </a>
+                        <a href="#" class="list-group-item list-group-item-action d-flex align-items-center"
+                           :class="{ active: sideMenuView === 'fuzzy-sr' }"
+                           @click.prevent="switchSideMenu('fuzzy-sr')">
+                            <i class="bi-search me-2"></i> 查詢物料
+                        </a>
+                        <a href="#" class="list-group-item list-group-item-action d-flex align-items-center"
+                           :class="{ active: sideMenuView === 'reports' }"
+                           @click.prevent="switchSideMenu('reports')">
+                            <i class="bi bi-file-earmark-bar-graph me-2"></i> 報表中心
+                        </a>
+                        <a href="#" class="list-group-item list-group-item-action d-flex align-items-center"
+                           :class="{ active: sideMenuView === 'settings' }"
+                           @click.prevent="switchSideMenu('settings')">
+                            <i class="bi bi-gear me-2"></i> 系統設定
+                        </a>
+                    </div>
+
+                    <!-- 系統狀態 -->
+                    <div class="card mt-4">
+                        <div class="card-header bg-secondary text-white py-2">
+                            <h6 class="mb-0"><i class="bi bi-info-circle me-1"></i> 系統狀態</h6>
+                        </div>
+                        <div class="card-body p-3">
+                            <div class="d-flex justify-content-between mb-2">
+                               <footer>
+                                    <p>版權所有, 未經許可請勿任意盜用</p>
+                                    <p>程式設計 : Wen-Yi Chien</p>
+                                    <p>E-mail : wenyichien168@gmail.com</p>
+                               </footer>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2">
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span>API狀態:</span>
+                                <span :class="apiConnected ? 'text-success' : 'text-danger'">
+                                    <i :class="apiConnected ? 'bi bi-check-circle-fill' : 'bi bi-exclamation-triangle-fill'"></i>
+                                    {{ apiConnected ? '已連接' : '未連接' }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 內容區 -->
+                <div class="col-md-9">
+                    <!-- 儀表板 (固定顯示) -->
+                    <div v-if="currentView === 'dashboard'">
+                        <div id="iframeContainer">
+                            <iframe
+                                ref="dashboardIframe"
+                                src="dashboard.html"
+                                scrolling="no"
+                                title="系統儀表板"
+                            ></iframe>
+                        </div>
+                    </div>
+
+                    <!-- 物料管理 -->
+                    <div v-if="sideMenuView === 'materials'">
+                        <div id="iframeContainer">
+                            <iframe
+                                ref="materialIframe"
+                                :src="materialPageUrl"
+                                scrolling="no"
+                                title="物料管理"
+                            ></iframe>
+                        </div>
+                    </div>
+
+                    <!-- 出入庫管理(手動) -->
+                    <div v-if="sideMenuView === 'in-records'">
+                        <div id="iframeContainer">
+                            <iframe
+                                ref="inOutIframe"
+                                src="Inbound and outbound.html"
+                                scrolling="no"
+                                title="出入庫管理(手動)"
+                            ></iframe>
+                        </div>
+                    </div>
+
+                    <!-- 出入庫管理(掃碼) -->
+                    <div v-if="sideMenuView === 'in-barcode'">
+                        <div id="iframeContainer">
+                            <iframe
+                                ref="inBarcodeIframe"
+                                src="scan-barcode.html"
+                                scrolling="no"
+                                title="出入庫管理(掃碼)"
+                            ></iframe>
+                        </div>
+                    </div>
+
+                    <!-- 庫存管理 -->
+                    <div v-if="sideMenuView === 'inventory'">
+                        <div id="iframeContainer">
+                            <iframe
+                                ref="inventoryIframe"
+                                src="Inventory summary.html"
+                                scrolling="no"
+                                title="庫存管理 - 庫存摘要"
+                            ></iframe>
+                        </div>
+                    </div>
+
+                    <!-- 查詢物料 -->
+                    <div v-if="sideMenuView === 'fuzzy-sr'">
+                        <div id="iframeContainer">
+                            <iframe
+                                ref="fuzzy-srIframe"
+                                src="fuzzy-sr.html"
+                                scrolling="no"
+                                title="查詢物料"
+                            ></iframe>
+                        </div>
+                    </div>
+
+                    <!-- 報表中心 -->
+                    <div v-if="sideMenuView === 'reports'">
+                        <div id="iframeContainer">
+                            <iframe
+                                ref="reportsIframe"
+                                src="report-center.html"
+                                scrolling="no"
+                                title="報表中心"
+                            ></iframe>
+                        </div>
+                    </div>
+
+                    <!-- 系統設定 -->
+                    <div v-if="sideMenuView === 'settings'">
+                        <h4>API 設定</h4>
+                        <div class="mb-3">
+                            <label for="apiBaseUrlInput" class="form-label">API 網址</label>
+                            <input type="text" id="apiBaseUrlInput" v-model="apiBaseUrl" class="form-control" placeholder="例如 http://10.10.7.66:5000/api" />
+                        </div>
+                        <div class="mb-3">
+                            <label for="apiKeyInput" class="form-label">API 密鑰 (Token)</label>
+                            <textarea id="apiKeyInput" v-model="apiKeyInput" class="form-control" rows="3" placeholder="請輸入或貼上 API Token"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <small class="text-muted">API 密鑰可於登入時獲取，或向系統管理員索取。</small>
+                        </div>
+                        <button class="btn btn-primary" @click="saveApiSettings">儲存設定</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- API狀態指示器 -->
+        <div class="api-status">
+            <div class="alert" :class="apiStatusClass" role="alert">
+                <span v-if="apiConnected"><i class="bi bi-check-circle-fill me-1"></i> 後端已連接</span>
+                <span v-else><i class="bi bi-exclamation-triangle-fill me-1"></i> 後端未連接</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+
+        createApp({
+            data() {
+                return {
+                    isAuthenticated: false,
+                    authLoading: false,
+                    authError: '',
+                    authSuccess: '',
+                    authForm: {
+                        username: '',
+                        password: ''
+                    },
+                    isRegisterMode: false,
+                    currentView: 'dashboard',  // 儀表板固定顯示
+                    sideMenuView: 'dashboard', // 左側主功能區選擇狀態
+                    apiBaseUrl: localStorage.getItem('apiBaseUrl') || 'http://10.10.7.66:5000/api',
+                    apiKey: localStorage.getItem('apiKey') || '',
+                    apiKeyInput: localStorage.getItem('apiKey') || '',
+                    apiConnected: false,
+                    lastUpdated: this.getCurrentDateTime(),
+                    dashboardStats: {
+                        materials: 0,
+                        lowStock: 0,
+                        normalStock: 0
+                    },
+                    materials: [],
+                    // 後端連接測試用資料
+                    testApiUrl: localStorage.getItem('apiBaseUrl') || 'http://10.10.7.66:5000/api',
+                    testApiKey: localStorage.getItem('apiKey') || '',
+                    testResultMessage: '',
+                    testResultColor: 'black',
+                    testLoading: false,
+                    materialPageUrl: 'material-management.html', // 物料管理頁面，請依實際檔名調整
+
+                    // 新增快速登入卡片資料
+                    quickLoginCards: [
+                        { label:'觀光科', username:'dep4', password:'pass4' },
+                    ],
+                };
+            },
+            computed: {
+                apiStatusClass() {
+                    return this.apiConnected ? 'alert-success' : 'alert-danger';
+                }
+            },
+            mounted() {
+                alert(
+                  "感謝您使用本校園物料管理系統\n\n" +
+                  "請依【科別】快速登入帳號登入資料庫\n" 
+                );
+
+                const savedUsername = localStorage.getItem('username');
+                if (savedUsername && this.apiKey) {
+                    this.authForm.username = savedUsername;
+                    this.isAuthenticated = true;
+                    this.apiKeyInput = this.apiKey;
+                    this.checkApiConnection();
+                    this.loadInitialData();
+                }
+
+                window.addEventListener('message', this.handleIframeMessage, false);
+            },
+            beforeUnmount() {
+                window.removeEventListener('message', this.handleIframeMessage, false);
+            },
+            methods: {
+                // 快速登入卡片點擊：帶入帳密並立即呼叫 login()
+                async quickLogin(card) {
+                    this.authForm.username = card.username;
+                    this.authForm.password = card.password;
+                    await this.login();
+                },
+
+                getCurrentDateTime() {
+                    const now = new Date();
+                    const year = now.getFullYear();
+                    const month = String(now.getMonth() + 1).padStart(2, '0');
+                    const day = String(now.getDate()).padStart(2, '0');
+                    const hours = String(now.getHours()).padStart(2, '0');
+                    const minutes = String(now.getMinutes()).padStart(2, '0');
+                    return `${year}-${month}-${day} ${hours}:${minutes}`;
+                },
+                toggleAuthMode() {
+                    this.isRegisterMode = !this.isRegisterMode;
+                    this.authError = '';
+                    this.authSuccess = '';
+                    this.authForm.password = '';
+                },
+                async checkBackendAvailable() {
+                    try {
+                        const res = await axios.get(`${this.apiBaseUrl.replace(/\/$/, '')}/health`, { timeout: 3000 });
+                        return res.data && res.data.status === 'ok';
+                    } catch {
+                        return false;
+                    }
+                },
+                async login() {
+                    this.authError = '';
+                    this.authSuccess = '';
+                    if (!this.authForm.username || !this.authForm.password) {
+                        this.authError = '請輸入帳號與密碼';
+                        return;
+                    }
+                    this.authLoading = true;
+
+                    const backendOk = await this.checkBackendAvailable();
+                    if (!backendOk) {
+                        this.authError = '無法連接後端服務，請稍後再試或聯絡系統管理員。';
+                        this.authLoading = false;
+                        return;
+                    }
+
+                    try {
+                        const response = await axios.post(`${this.apiBaseUrl.replace(/\/$/, '')}/login`, {
+                            username: this.authForm.username,
+                            password: this.authForm.password
+                        });
+                        if (response.data && response.data.access_token) {
+                            this.apiKeyInput = response.data.access_token;
+                            this.apiKey = response.data.access_token;
+                            this.isAuthenticated = true;
+                            this.lastUpdated = this.getCurrentDateTime();
+                            localStorage.setItem('username', this.authForm.username);
+                            localStorage.setItem('apiKey', response.data.access_token);
+                            alert('登入成功！API 密鑰已自動取得並儲存。');
+                            this.loadInitialData();
+                        } else {
+                            this.authError = '登入失敗，伺服器未回傳有效資料';
+                        }
+                    } catch (error) {
+                        if (error.response && error.response.data && error.response.data.error) {
+                            this.authError = error.response.data.error;
+                        } else {
+                            this.authError = '登入失敗/帳號未註冊授權，請重新登入/註冊後再行登入';
+                        }
+                    } finally {
+                        this.authLoading = false;
+                    }
+                },
+                async register() {
+                    this.authError = '';
+                    this.authSuccess = '';
+                    if (!this.authForm.username || !this.authForm.password) {
+                        this.authError = '請輸入帳號與密碼';
+                        return;
+                    }
+                    if (this.authForm.password.length < 4) {
+                        this.authError = '密碼長度至少4個字元';
+                        return;
+                    }
+                    this.authLoading = true;
+
+                    const backendOk = await this.checkBackendAvailable();
+                    if (!backendOk) {
+                        this.authError = '無法連接後端服務，請稍後再試或聯絡系統管理員。';
+                        this.authLoading = false;
+                        return;
+                    }
+
+                    try {
+                        const response = await axios.post(`${this.apiBaseUrl.replace(/\/$/, '')}/register`, {
+                            username: this.authForm.username,
+                            password: this.authForm.password
+                        });
+                        if (response.data && response.data.message) {
+                            this.authSuccess = response.data.message + '，請使用新帳號登入。';
+                            this.isRegisterMode = false;
+                            this.authForm.password = '';
+                        } else {
+                            this.authError = '註冊失敗，伺服器未回傳有效資料';
+                        }
+                    } catch (error) {
+                        if (error.response && error.response.data && error.response.data.error) {
+                            this.authError = error.response.data.error;
+                        } else {
+                            this.authError = '註冊失敗，請稍後再試';
+                        }
+                    } finally {
+                        this.authLoading = false;
+                    }
+                },
+                logout() {
+                    this.isAuthenticated = false;
+                    this.authForm.username = '';
+                    this.authForm.password = '';
+                    this.apiKey = '';
+                    this.apiKeyInput = '';
+                    this.currentView = 'dashboard';
+                    this.sideMenuView = 'dashboard';
+                    this.apiConnected = false;
+                    this.materials = [];
+                    this.dashboardStats = { materials: 0, lowStock: 0, normalStock: 0 };
+                    this.authError = '';
+                    this.authSuccess = '';
+                    this.testApiUrl = '';
+                    this.testApiKey = '';
+                    this.testResultMessage = '';
+                    this.testResultColor = 'black';
+                    this.testLoading = false;
+
+                    localStorage.removeItem('apiKey');
+                    localStorage.removeItem('apiBaseUrl');
+                    localStorage.removeItem('username');
+                },
+                switchView(view) {
+                    this.currentView = view;
+                    this.sideMenuView = view;
+                },
+                switchSideMenu(view) {
+                    this.sideMenuView = view;
+                },
+                saveApiSettings() {
+                    if (!this.apiBaseUrl) {
+                        alert('請輸入 API 網址');
+                        return;
+                    }
+                    if (!this.apiKeyInput) {
+                        alert('請輸入 API 密鑰');
+                        return;
+                    }
+                    this.apiBaseUrl = this.apiBaseUrl.trim();
+                    this.apiKey = this.apiKeyInput.trim();
+                    localStorage.setItem('apiBaseUrl', this.apiBaseUrl);
+                    localStorage.setItem('apiKey', this.apiKey);
+                    alert('API 設定已儲存');
+                    this.checkApiConnection();
+                    this.loadInitialData();
+                },
+                async checkApiConnection() {
+                    if (!this.apiKey) {
+                        this.apiConnected = false;
+                        return false;
+                    }
+                    try {
+                        const response = await axios.get(`${this.apiBaseUrl.replace(/\/$/, '')}/materials`, {
+                            headers: {
+                                Authorization: `Bearer ${this.apiKey}`
+                            }
+                        });
+                        this.apiConnected = Array.isArray(response.data);
+                        return this.apiConnected;
+                    } catch (error) {
+                        this.apiConnected = false;
+                        return false;
+                    }
+                },
+                async loadInitialData() {
+                    if (!this.apiKey) return;
+                    try {
+                        const response = await axios.get(`${this.apiBaseUrl.replace(/\/$/, '')}/materials`, {
+                            headers: {
+                                Authorization: `Bearer ${this.apiKey}`
+                            }
+                        });
+                        if (Array.isArray(response.data)) {
+                            this.materials = response.data;
+                            const totalMaterials = response.data.length;
+                            const lowStockCount = response.data.filter(m => 
+                                (parseInt(m.current_stock) || 0) < (parseInt(m.safety_stock) || 0)
+                            ).length;
+
+                            this.dashboardStats.materials = totalMaterials;
+                            this.dashboardStats.lowStock = lowStockCount;
+                            this.apiConnected = true;
+                            this.lastUpdated = this.getCurrentDateTime();
+                        } else {
+                            this.apiConnected = false;
+                            console.error('loadInitialData: 回傳資料格式錯誤', response.data);
+                        }
+                    } catch (error) {
+                        this.apiConnected = false;
+                        if (error.response && error.response.status === 401) {
+                            this.logout();
+                            this.authError = '身份驗證失效，請重新登入';
+                        }
+                        console.error('loadInitialData 錯誤:', error.response ? error.response.data : error.message);
+                    }
+                },
+                refreshDashboard() {
+                    this.loadInitialData();
+                },
+                async testConnection() {
+                    this.testResultMessage = '';
+                    this.testResultColor = 'black';
+                    if (!this.testApiUrl) {
+                        this.testResultMessage = '請輸入 API 網址';
+                        this.testResultColor = 'red';
+                        return;
+                    }
+                    this.testLoading = true;
+                    try {
+                        const res = await axios.get(`${this.testApiUrl.replace(/\/$/, '')}/health`, {
+                            headers: { 'Authorization': `Bearer ${this.testApiKey}` },
+                            timeout: 5000
+                        });
+                        if (res.status === 200) {
+                            this.testResultMessage = `連接成功！後端版本: ${res.data.version || '未知'}`;
+                            this.testResultColor = 'green';
+                            this.apiBaseUrl = this.testApiUrl;
+                            this.apiKeyInput = this.testApiKey;
+                            localStorage.setItem('apiBaseUrl', this.apiBaseUrl);
+                            localStorage.setItem('apiKey', this.apiKeyInput);
+                        } else {
+                            this.testResultMessage = `連接失敗，狀態碼: ${res.status}`;
+                            this.testResultColor = 'red';
+                        }
+                    } catch (error) {
+                        this.testResultMessage = `連接失敗，錯誤: ${error.message}`;
+                        this.testResultColor = 'red';
+                    } finally {
+                        this.testLoading = false;
+                    }
+                },
+                handleIframeMessage(event) {
+                    if (event.origin !== window.location.origin && event.origin !== "null") {
+                        return;
+                    }
+
+                    if (event.data) {
+                        if (event.data.type === 'adjustHeight' && event.data.height) {
+                            const iframeRefs = [
+                                'dashboardIframe',
+                                'inventoryIframe',
+                                'materialIframe',
+                                'inOutIframe',
+                                'inBarcodeIframe',
+                                'reportsIframe'
+                            ];
+                            iframeRefs.forEach(refName => {
+                                if (this.$refs[refName] && event.source === this.$refs[refName].contentWindow) {
+                                    this.adjustIframeHeight(this.$refs[refName], event.data.height);
+                                }
+                            });
+                        } else if (event.data.type === 'inventoryUpdated') {
+                            this.loadInitialData();
+                        } else if ((event.data.type === 'switchView' || event.data.type === 'navigateTo') && event.data.view) {
+                            // 接收子頁面發送的切換左側主功能區請求
+                            this.switchSideMenu(event.data.view);
+                        }
+                    }
+                },
+                adjustIframeHeight(iframe, contentHeight) {
+                    if (!iframe) return;
+                    const container = iframe.parentElement;
+                    const minHeight = 400;
+                    const finalHeight = Math.max(contentHeight, minHeight);
+
+                    iframe.style.height = finalHeight + 'px';
+                    if (container) {
+                        container.style.height = finalHeight + 'px';
+                    }
+                },
+                // 根據用戶名獲取部門名稱
+                getDepartmentName(username) {
+                    const departmentMap = {
+                        dep1: "dep1-商經科",
+                        dep2: "dep2-會事科",
+                        dep3: "dep3-國貿科",
+                        dep4: "dep4-觀光科",
+                        dep5: "dep5-資處科",
+                        dep6: "dep6-機械科",
+                        dep7: "dep7-電圖科",
+                        dep8: "dep8-室設科",
+                        dep9: "dep9-家設科"
+                    };
+                    return departmentMap[username] || username; // 若無對應則顯示原用戶名
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

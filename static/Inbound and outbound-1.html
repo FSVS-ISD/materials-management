@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>校園物料管理系統 - 出入庫介面 (分類篩選)</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/npm/vue@3.2.47/dist/vue.global.prod.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <style>
+    html, body, #app {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      background-color: #f8f9fa;
+    }
+    /* 出入庫清單區塊置底，並可隨時清除 */
+    #record-lists {
+      margin-top: 2rem;
+    }
+    .clear-btn-container {
+      text-align: right;
+      margin-bottom: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+  <div id="app" class="container py-4" style="max-width: 900px;">
+    <h1 class="mb-4 text-center">校園物料管理系統 - 出入庫介面</h1>
+
+    <!-- 最新入出庫成功訊息 -->
+    <div v-if="latestRecordMessage" :class="{'alert alert-success': true, 'mb-4': true}">
+      <strong>{{ latestRecordType === 'in' ? '入庫成功：' : '出庫成功：' }}</strong>
+      物料名稱：{{ latestRecordMaterial.name }} ({{ latestRecordMaterial.item_id }})，
+      條碼：{{ latestRecordMaterial.barcode || '-' }}，
+      分類：{{ latestRecordMaterial.category }}，
+      當前庫存：{{ latestRecordMaterial.current_stock }} {{ latestRecordMaterial.unit }}，
+      數量：{{ latestRecordQuantity }}
+    </div>
+
+    <!-- 授權錯誤訊息 -->
+    <div v-if="authErrorMessage" class="alert alert-danger text-center">
+      {{ authErrorMessage }}
+    </div>
+
+    <!-- 登入表單（自動登入失敗時顯示） -->
+    <div v-if="showLoginForm" class="card mx-auto mb-4" style="max-width: 400px;">
+      <div class="card-body">
+        <h5 class="card-title text-center mb-3">請登入以取得授權</h5>
+        <div class="mb-3">
+          <input v-model="loginForm.username" class="form-control" placeholder="帳號" />
+        </div>
+        <div class="mb-3">
+          <input v-model="loginForm.password" type="password" class="form-control" placeholder="密碼" />
+        </div>
+        <div class="d-grid">
+          <button @click="login" class="btn btn-primary" :disabled="loginLoading">
+            {{ loginLoading ? '登入中...' : '登入' }}
+          </button>
+        </div>
+        <div class="mt-3 text-danger text-center" v-if="loginError">{{ loginError }}</div>
+      </div>
+    </div>
+
+    <!-- 主功能區塊 -->
+    <div v-if="token && !authErrorMessage">
+      <ul class="nav nav-tabs mb-3">
+        <li class="nav-item">
+          <a class="nav-link" :class="{active: currentTab==='in'}" href="#" @click.prevent="switchTab('in')">入庫管理</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" :class="{active: currentTab==='out'}" href="#" @click.prevent="switchTab('out')">出庫管理</a>
+        </li>
+        <li class="nav-item ms-auto">
+          <button @click="logout" class="btn btn-outline-danger btn-sm">登出</button>
+        </li>
+      </ul>
+
+      <!-- 入庫管理頁面 -->
+      <div v-show="currentTab === 'in'">
+        <!-- 新增入庫表單(編輯功能已移除) -->
+        <div class="card mb-4">
+          <div class="card-body">
+            <h5 class="card-title">➕ 新增入庫紀錄</h5>
+            <form @submit.prevent="submitInRecord" novalidate>
+              <div class="row g-2">
+                <div class="col-md-4">
+                  <select v-model="inForm.category" @change="onInCategoryChange" class="form-select" required>
+                    <option value="" disabled>請選擇分類</option>
+                    <option v-for="cat in categories" :key="cat.id" :value="cat.name">{{ cat.name }}</option>
+                  </select>
+                </div>
+                <div class="col-md-4">
+                  <select v-model="inForm.material_id" class="form-select" required :disabled="filteredInMaterials.length === 0" @change="onInMaterialChange">
+                    <option value="" disabled>請選擇物料</option>
+                    <option v-for="m in filteredInMaterials" :key="m.id" :value="m.item_id">{{ m.name }} ({{ m.item_id }})</option>
+                  </select>
+                </div>
+                <div class="col-md-4">
+                  <input v-model="inForm.barcode" class="form-control" placeholder="條碼 barcode" readonly />
+                </div>
+                <div class="col-md-4 mt-2">
+                  <input v-model.number="inForm.quantity" class="form-control" type="number" min="1" placeholder="數量" required />
+                </div>
+                <div class="col-md-4 mt-2">
+                  <input v-model="inForm.source" class="form-control" placeholder="來源 (選填)" />
+                </div>
+                <div class="col-md-4 mt-2">
+                  <input v-model="inForm.handler" class="form-control" placeholder="處理人員 (選填)" />
+                </div>
+              </div>
+              <div class="mt-3">
+                <button type="submit" class="btn btn-success me-2" :disabled="submitLoadingIn">
+                  送出新增
+                </button>
+              </div>
+              <div class="mt-2">
+                <div class="text-success" v-if="submitMessageIn && !submitErrorIn">{{ submitMessageIn }}</div>
+                <div class="text-danger" v-if="submitErrorIn">{{ submitErrorIn }}</div>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- 出庫管理頁面 -->
+      <div v-show="currentTab === 'out'">
+        <!-- 新增出庫表單(編輯功能已移除) -->
+        <div class="card mb-4">
+          <div class="card-body">
+            <h5 class="card-title">➕ 新增出庫紀錄</h5>
+            <form @submit.prevent="submitOutRecord" novalidate>
+              <div class="row g-2">
+                <div class="col-md-4">
+                  <select v-model="outForm.category" @change="onOutCategoryChange" class="form-select" required>
+                    <option value="" disabled>請選擇分類</option>
+                    <option v-for="cat in categories" :key="cat.id" :value="cat.name">{{ cat.name }}</option>
+                  </select>
+                </div>
+                <div class="col-md-4">
+                  <select v-model="outForm.material_id" class="form-select" required :disabled="filteredOutMaterials.length === 0" @change="onOutMaterialChange">
+                    <option value="" disabled>請選擇物料</option>
+                    <option v-for="m in filteredOutMaterials" :key="m.id" :value="m.item_id">{{ m.name }} ({{ m.item_id }})</option>
+                  </select>
+                </div>
+                <div class="col-md-4">
+                  <input v-model="outForm.barcode" class="form-control" placeholder="條碼 barcode" readonly />
+                </div>
+                <div class="col-md-4 mt-2">
+                  <input v-model.number="outForm.quantity" class="form-control" type="number" min="1" placeholder="數量" required />
+                </div>
+                <div class="col-md-4 mt-2">
+                  <input v-model="outForm.user" class="form-control" placeholder="使用者 (選填)" />
+                </div>
+                <div class="col-md-4 mt-2">
+                  <input v-model="outForm.department" class="form-control" placeholder="部門 (選填)" />
+                </div>
+                <div class="col-md-4 mt-2">
+                  <input v-model="outForm.purpose" class="form-control" placeholder="用途 (選填)" />
+                </div>
+              </div>
+              <div class="mt-3">
+                <button type="submit" class="btn btn-success me-2" :disabled="submitLoadingOut">
+                  送出新增
+                </button>
+              </div>
+              <div class="mt-2">
+                <div class="text-success" v-if="submitMessageOut && !submitErrorOut">{{ submitMessageOut }}</div>
+                <div class="text-danger" v-if="submitErrorOut">{{ submitErrorOut }}</div>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- 出入庫清單置底區塊 -->
+      <div id="record-lists">
+        <div class="clear-btn-container">
+          <button class="btn btn-sm btn-outline-danger" @click="clearRecords">清除所有出入庫清單</button>
+        </div>
+
+        <!-- 只顯示入庫紀錄清單 -->
+        <div v-if="currentTab === 'in' && inRecords.length > 0" class="mb-4">
+          <h5>📥 入庫紀錄清單</h5>
+          <div class="table-responsive">
+            <table class="table table-striped table-bordered align-middle">
+              <thead class="table-light">
+                <tr>
+                  <th>紀錄ID</th>
+                  <th>分類</th>
+                  <th>物料ID</th>
+                  <th>條碼</th>
+                  <th>數量</th>
+                  <th>來源</th>
+                  <th>處理人員</th>
+                  <th>入庫時間</th>
+                  <th class="text-center" style="width: 120px;">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="record in inRecords" :key="record.id">
+                  <td>{{ record.id }}</td>
+                  <td>{{ record.category || '-' }}</td>
+                  <td>{{ record.material_id }}</td>
+                  <td>{{ record.barcode || '-' }}</td>
+                  <td>{{ record.quantity }}</td>
+                  <td>{{ record.source || '-' }}</td>
+                  <td>{{ record.handler || '-' }}</td>
+                  <td>{{ formatDate(record.date) }}</td>
+                  <td class="text-center">
+                    <!-- 移除編輯按鈕 -->
+                    <button class="btn btn-sm btn-danger" @click="deleteInRecord(record.id)">刪除</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 只顯示出庫紀錄清單 -->
+        <div v-if="currentTab === 'out' && outRecords.length > 0" class="mb-4">
+          <h5>📤 出庫紀錄清單</h5>
+          <div class="table-responsive">
+            <table class="table table-striped table-bordered align-middle">
+              <thead class="table-light">
+                <tr>
+                  <th>紀錄ID</th>
+                  <th>分類</th>
+                  <th>物料ID</th>
+                  <th>條碼</th>
+                  <th>數量</th>
+                  <th>使用者</th>
+                  <th>部門</th>
+                  <th>用途</th>
+                  <th>出庫時間</th>
+                  <th class="text-center" style="width: 120px;">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="record in outRecords" :key="record.id">
+                  <td>{{ record.id }}</td>
+                  <td>{{ record.category || '-' }}</td>
+                  <td>{{ record.material_id }}</td>
+                  <td>{{ record.barcode || '-' }}</td>
+                  <td>{{ record.quantity }}</td>
+                  <td>{{ record.user || '-' }}</td>
+                  <td>{{ record.department || '-' }}</td>
+                  <td>{{ record.purpose || '-' }}</td>
+                  <td>{{ formatDate(record.date) }}</td>
+                  <td class="text-center">
+                    <!-- 移除編輯按鈕 -->
+                    <button class="btn btn-sm btn-danger" @click="deleteOutRecord(record.id)">刪除</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 無紀錄提示 -->
+        <div v-if="(currentTab === 'in' && inRecords.length === 0) || (currentTab === 'out' && outRecords.length === 0)" class="alert alert-info text-center">
+          目前無{{ currentTab === 'in' ? '入庫' : '出庫' }}紀錄
+        </div>
+      </div>
+    </div>
+
+    <!-- 無 token 且無登入表單時提示 -->
+    <div v-if="!token && !showLoginForm && !authErrorMessage" class="alert alert-warning text-center">
+      尚未取得授權，請聯絡系統管理員。
+    </div>
+  </div>
+
+  <script>
+    const { createApp } = Vue;
+    createApp({
+      data() {
+        return {
+          apiUrl: localStorage.getItem('apiUrl') || "http://127.0.0.1:5000/api",
+          token: localStorage.getItem('token') || "",
+          authErrorMessage: "",
+          showLoginForm: false,
+          loginForm: { username: "", password: "" },
+          loginLoading: false,
+          loginError: "",
+
+          currentTab: 'in',
+
+          categories: [],
+          allMaterials: [],
+
+          inRecords: [],
+          inForm: { category: "", material_id: "", barcode: "", quantity: 1, source: "", handler: "" },
+          filteredInMaterials: [],
+          submitLoadingIn: false,
+          submitMessageIn: "",
+          submitErrorIn: "",
+
+          outRecords: [],
+          outForm: { category: "", material_id: "", barcode: "", quantity: 1, user: "", department: "", purpose: "" },
+          filteredOutMaterials: [],
+          submitLoadingOut: false,
+          submitMessageOut: "",
+          submitErrorOut: "",
+
+          latestRecordMessage: "",
+          latestRecordMaterial: null,
+          latestRecordQuantity: 0,
+          latestRecordType: "",
+        };
+      },
+      mounted() {
+        if (!this.token) {
+          const defaultUsername = localStorage.getItem('username') || 'your_default_user';
+          const defaultPassword = localStorage.getItem('password') || 'your_default_password';
+
+          axios.post(`${this.apiUrl}/login`, {
+            username: defaultUsername,
+            password: defaultPassword
+          }).then(res => {
+            this.token = res.data.access_token;
+            localStorage.setItem('token', this.token);
+            localStorage.setItem('username', defaultUsername);
+            localStorage.setItem('password', defaultPassword);
+            this.authErrorMessage = "";
+            this.showLoginForm = false;
+            this.fetchCategories();
+            this.fetchAllMaterials();
+            this.loadData();
+            this.$nextTick(() => {
+              sendHeightToParent();
+            });
+          }).catch(() => {
+            this.authErrorMessage = "自動登入失敗，請手動登入帳號密碼。";
+            this.showLoginForm = true;
+            sendHeightToParent();
+          });
+        } else {
+          this.fetchCategories();
+          this.fetchAllMaterials();
+          this.loadData();
+          this.$nextTick(() => {
+            sendHeightToParent();
+          });
+        }
+      },
+      updated() {
+        sendHeightToParent();
+      },
+      methods: {
+        switchTab(tab) {
+          this.currentTab = tab;
+          this.clearMessages();
+          this.loadData();
+          this.$nextTick(() => {
+            sendHeightToParent();
+          });
+        },
+        clearMessages() {
+          this.submitMessageIn = "";
+          this.submitErrorIn = "";
+          this.submitMessageOut = "";
+          this.submitErrorOut = "";
+        },
+        login() {
+          this.loginLoading = true;
+          this.loginError = "";
+          axios.post(`${this.apiUrl}/login`, {
+            username: this.loginForm.username,
+            password: this.loginForm.password
+          }).then(res => {
+            this.token = res.data.access_token;
+            localStorage.setItem('token', this.token);
+            localStorage.setItem('username', this.loginForm.username);
+            localStorage.setItem('password', this.loginForm.password);
+            this.authErrorMessage = "";
+            this.showLoginForm = false;
+            this.fetchCategories();
+            this.fetchAllMaterials();
+            this.loadData();
+            this.loginLoading = false;
+            this.$nextTick(() => {
+              sendHeightToParent();
+            });
+          }).catch(err => {
+            this.loginError = "登入失敗：" + (err.response?.data?.error || err.response?.data?.message || err.message);
+            this.loginLoading = false;
+            sendHeightToParent();
+          });
+        },
+        logout() {
+          this.token = "";
+          localStorage.removeItem('token');
+          localStorage.removeItem('username');
+          localStorage.removeItem('password');
+          this.inRecords = [];
+          this.outRecords = [];
+          this.authErrorMessage = "";
+          this.showLoginForm = true;
+          this.$nextTick(() => {
+            sendHeightToParent();
+          });
+        },
+        loadData() {
+          if(this.currentTab === 'in'){
+            this.fetchInRecords();
+          } else if(this.currentTab === 'out'){
+            this.fetchOutRecords();
+          }
+        },
+
+        fetchCategories() {
+          if (!this.token) return;
+          axios.get(`${this.apiUrl}/categories`, { headers: { Authorization: `Bearer ${this.token}` } })
+            .then(res => {
+              this.categories = res.data || [];
+            }).catch(() => {});
+        },
+        fetchAllMaterials() {
+          if (!this.token) return;
+          axios.get(`${this.apiUrl}/materials`, { headers: { Authorization: `Bearer ${this.token}` } })
+            .then(res => {
+              this.allMaterials = res.data || [];
+            }).catch(() => {});
+        },
+
+        onInCategoryChange() {
+          if (!this.inForm.category) {
+            this.filteredInMaterials = [];
+            this.inForm.material_id = "";
+            this.inForm.barcode = "";
+            return;
+          }
+          this.filteredInMaterials = this.allMaterials.filter(m => m.category === this.inForm.category);
+          this.inForm.material_id = "";
+          this.inForm.barcode = "";
+        },
+        onInMaterialChange() {
+          const mat = this.allMaterials.find(m => m.item_id === this.inForm.material_id);
+          this.inForm.barcode = mat ? (mat.barcode || "") : "";
+        },
+
+        onOutCategoryChange() {
+          if (!this.outForm.category) {
+            this.filteredOutMaterials = [];
+            this.outForm.material_id = "";
+            this.outForm.barcode = "";
+            return;
+          }
+          this.filteredOutMaterials = this.allMaterials.filter(m => m.category === this.outForm.category);
+          this.outForm.material_id = "";
+          this.outForm.barcode = "";
+        },
+        onOutMaterialChange() {
+          const mat = this.allMaterials.find(m => m.item_id === this.outForm.material_id);
+          this.outForm.barcode = mat ? (mat.barcode || "") : "";
+        },
+
+        fetchInRecords() {
+          this.clearMessages();
+          axios.get(`${this.apiUrl}/in-records`, {
+            headers: { Authorization: `Bearer ${this.token}` }
+          }).then(res => {
+            this.inRecords = res.data.records || res.data || [];
+            this.$nextTick(() => {
+              sendHeightToParent();
+            });
+          }).catch(err => {
+            if (err.response && err.response.status === 401) {
+              this.authErrorMessage = "讀取入庫資料失敗或授權過期，請重新登入。";
+              this.showLoginForm = true;
+              this.token = "";
+              localStorage.removeItem('token');
+              localStorage.removeItem('username');
+              localStorage.removeItem('password');
+            }
+            this.$nextTick(() => {
+              sendHeightToParent();
+            });
+          });
+        },
+        submitInRecord() {
+          this.submitLoadingIn = true;
+          this.submitMessageIn = "";
+          this.submitErrorIn = "";
+
+          const quantity = this.inForm.quantity;
+
+          const payload = {
+            material_id: this.inForm.material_id,
+            quantity: quantity,
+            source: this.inForm.source,
+            handler: this.inForm.handler,
+            barcode: this.inForm.barcode 
+          };
+
+          axios.post(`${this.apiUrl}/in-records`, payload, {
+            headers: { Authorization: `Bearer ${this.token}` }
+          }).then(res => {
+            this.submitMessageIn = "入庫紀錄已新增";
+            this.submitLoadingIn = false;
+            this.inForm = { category: "", material_id: "", barcode: "", quantity: 1, source: "", handler: "" };
+            this.filteredInMaterials = [];
+            this.fetchInRecords();
+            this.fetchAllMaterials();
+
+            if (res.data && res.data.material) {
+              this.latestRecordType = 'in';
+              this.latestRecordMaterial = res.data.material;
+              this.latestRecordQuantity = quantity;
+              this.latestRecordMessage = this.submitMessageIn;
+              this.showLatestRecordMessage();
+            }
+
+            this.$nextTick(() => {
+              sendHeightToParent();
+              window.parent.postMessage({ type: 'inventoryUpdated' }, '*');
+            });
+          }).catch(err => {
+            this.submitErrorIn = err.response?.data?.error || "新增入庫紀錄失敗";
+            this.submitLoadingIn = false;
+            this.$nextTick(() => {
+              sendHeightToParent();
+            });
+          });
+        },
+        deleteInRecord(id) {
+          if (!confirm("確定要刪除此入庫紀錄？")) return;
+          axios.delete(`${this.apiUrl}/in-records/${id}`, {
+            headers: { Authorization: `Bearer ${this.token}` }
+          }).then(() => {
+            this.fetchInRecords();
+            this.fetchAllMaterials();
+            this.$nextTick(() => {
+              sendHeightToParent();
+              window.parent.postMessage({ type: 'inventoryUpdated' }, '*');
+            });
+          }).catch(err => {
+            alert("刪除失敗，請稍後再試。" + (err.response?.data?.error || err.message));
+            this.$nextTick(() => {
+              sendHeightToParent();
+            });
+          });
+        },
+
+        fetchOutRecords() {
+          this.clearMessages();
+          axios.get(`${this.apiUrl}/out-records`, {
+            headers: { Authorization: `Bearer ${this.token}` }
+          }).then(res => {
+            this.outRecords = res.data.records || res.data || [];
+            this.$nextTick(() => {
+              sendHeightToParent();
+            });
+          }).catch(err => {
+            if (err.response && err.response.status === 401) {
+              this.authErrorMessage = "讀取出庫資料失敗或授權過期，請重新登入。";
+              this.showLoginForm = true;
+              this.token = "";
+              localStorage.removeItem('token');
+              localStorage.removeItem('username');
+              localStorage.removeItem('password');
+            }
+            this.$nextTick(() => {
+              sendHeightToParent();
+            });
+          });
+        },
+        submitOutRecord() {
+          this.submitLoadingOut = true;
+          this.submitMessageOut = "";
+          this.submitErrorOut = "";
+
+          const quantity = this.outForm.quantity;
+
+          const payload = {
+            material_id: this.outForm.material_id,
+            quantity: quantity,
+            user: this.outForm.user,
+            department: this.outForm.department,
+            purpose: this.outForm.purpose,
+            barcode: this.outForm.barcode 
+          };
+
+          axios.post(`${this.apiUrl}/out-records`, payload, {
+            headers: { Authorization: `Bearer ${this.token}` }
+          }).then(res => {
+            this.submitMessageOut = "出庫紀錄已新增";
+            this.submitLoadingOut = false;
+            this.outForm = { category: "", material_id: "", barcode: "", quantity: 1, user: "", department: "", purpose: "" };
+            this.filteredOutMaterials = [];
+            this.fetchOutRecords();
+            this.fetchAllMaterials();
+
+            if (res.data && res.data.material) {
+              this.latestRecordType = 'out';
+              this.latestRecordMaterial = res.data.material;
+              this.latestRecordQuantity = quantity;
+              this.latestRecordMessage = this.submitMessageOut;
+              this.showLatestRecordMessage();
+            }
+
+            this.$nextTick(() => {
+              sendHeightToParent();
+              window.parent.postMessage({ type: 'inventoryUpdated' }, '*');
+            });
+          }).catch(err => {
+            this.submitErrorOut = err.response?.data?.error || "新增出庫紀錄失敗";
+            this.submitLoadingOut = false;
+            this.$nextTick(() => {
+              sendHeightToParent();
+            });
+          });
+        },
+        deleteOutRecord(id) {
+          if (!confirm("確定要刪除此出庫紀錄？")) return;
+          axios.delete(`${this.apiUrl}/out-records/${id}`, {
+            headers: { Authorization: `Bearer ${this.token}` }
+          }).then(() => {
+            this.fetchOutRecords();
+            this.fetchAllMaterials();
+            this.$nextTick(() => {
+              sendHeightToParent();
+              window.parent.postMessage({ type: 'inventoryUpdated' }, '*');
+            });
+          }).catch(err => {
+            alert("刪除失敗，請稍後再試。" + (err.response?.data?.error || err.message));
+            this.$nextTick(() => {
+              sendHeightToParent();
+            });
+          });
+        },
+
+        clearRecords() {
+          if (!confirm("確定要清除所有入庫與出庫清單顯示？此操作不會刪除資料庫資料。")) return;
+          this.inRecords = [];
+          this.outRecords = [];
+          this.$nextTick(() => {
+            sendHeightToParent();
+          });
+        },
+
+        formatDate(datetimeStr) {
+          if (!datetimeStr) return '-';
+          const dt = new Date(datetimeStr);
+          return dt.toLocaleString();
+        },
+
+        showLatestRecordMessage() {
+          setTimeout(() => {
+            this.latestRecordMessage = "";
+            this.latestRecordMaterial = null;
+            this.latestRecordQuantity = 0;
+            this.latestRecordType = "";
+          }, 8000);
+        }
+      }
+    }).mount('#app');
+
+    function sendHeightToParent() {
+      const height = document.documentElement.scrollHeight || document.body.scrollHeight;
+      window.parent.postMessage({ type: 'adjustHeight', height: height }, '*');
+    }
+
+    window.addEventListener('load', () => {
+      sendHeightToParent();
+    });
+
+    const observer = new MutationObserver(() => {
+      sendHeightToParent();
+    });
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true });
+  </script>
+</body>
+</html>

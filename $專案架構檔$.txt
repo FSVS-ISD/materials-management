@@ -1,0 +1,19 @@
+$專案架構檔$
+
+project/
+│
+├─ app.py                 # 主程式
+├─ extensions.py          # 擴充套件實例 (db, migrate, jwt)
+├─ models.py              # 所有資料庫模型定義
+├─ routes/                # 路由藍圖
+│    ├─ __init__.py
+│    ├─ user.py
+│    ├─ material.py       # 包含儀表板統計端點
+│    ├─ category.py
+│    ├─ record.py
+│    ├─ report.py
+│    └─ backup.py
+├─ services.py            # 服務類別
+├─ utils.py               # 工具函式
+├─ static/                # 靜態檔案
+└─ fonts/                 # 字型檔案
