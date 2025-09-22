@@ -9,6 +9,7 @@ from flask_jwt_extended import (
 )
 from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import sessionmaker
 
 # 匯入共用模型模組與 Base
 from models import Base, User, Material, Category, InRecord, OutRecord
@@ -78,6 +79,12 @@ def get_db_uri_for_user(username: str) -> str:
     logger.debug(f"使用預設資料庫 {default_uri}")
     return default_uri
 
+# --- 創建資料表的函數 ---
+def create_tables_if_not_exist(database_uri):
+    engine = create_engine(database_uri)
+    Base.metadata.create_all(engine)  # 創建所有資料表
+    logger.info("資料表已成功創建或已存在。")
+
 # --- 健康檢查 API ---
 @app.route('/api/health', methods=['GET'], strict_slashes=False)
 def health_check():
@@ -88,8 +95,8 @@ if __name__ == '__main__':
     with db_uri_lock:
         # 確保資料表存在
         try:
-            create_tables_if_not_exist(f"sqlite:///{default_db_path}")
-            checked_dbs.add(f"sqlite:///{default_db_path}")
+            create_tables_if_not_exist(app.config['SQLALCHEMY_DATABASE_URI'])
+            checked_dbs.add(app.config['SQLALCHEMY_DATABASE_URI'])
         except SQLAlchemyError as e:
             logger.error(f"資料表創建失敗: {e}")
             exit(1)
