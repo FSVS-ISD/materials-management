@@ -90,6 +90,35 @@ def create_tables_if_not_exist(database_uri):
 def health_check():
     return jsonify({'status': 'ok', 'version': '1.0.0'})
 
+# --- 登入 API ---
+@user_bp.route('/login', methods=['POST'])
+def login():
+    # 獲取請求的 JSON 數據
+    data = request.get_json()
+    username = data.get('username')
+    password = data.get('password')
+
+    # 驗證用戶名和密碼
+    if not username or not password:
+        return jsonify({"msg": "用戶名和密碼為必填項"}), 400
+
+    # 假設使用 SQLAlchemy 查詢用戶
+    session = sessionmaker(bind=create_engine(app.config['SQLALCHEMY_DATABASE_URI']))()
+    try:
+        user = session.query(User).filter_by(username=username).first()
+        
+        if user and user.verify_password(password):  # 假設 User 模型有 verify_password 方法
+            # 創建 JWT
+            access_token = create_access_token(identity=username)
+            return jsonify(access_token=access_token), 200
+        else:
+            return jsonify({"msg": "用戶名或密碼錯誤"}), 401
+    except SQLAlchemyError as e:
+        logger.error(f"資料庫查詢失敗: {e}")
+        return jsonify({"msg": "伺服器錯誤"}), 500
+    finally:
+        session.close()
+
 # --- 主程式啟動 ---
 if __name__ == '__main__':
     with db_uri_lock:
