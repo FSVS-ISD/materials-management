@@ -9,7 +9,7 @@ from models import User
 import threading
 import logging
 from werkzeug.security import check_password_hash
-from config import get_session, default_db_path  # 從 config.py 匯入
+from config import get_session, default_db_path
 
 user_bp = Blueprint('user', __name__, url_prefix='/api')
 
@@ -22,7 +22,6 @@ def register():
     if not data or 'username' not in data or 'password' not in data:
         return jsonify({'error': 'username and password required'}), 400
 
-    # 註冊使用預設資料庫，自己建立 session，不使用 g.db_session
     Session = get_session(f"sqlite:///{default_db_path}")
     session = Session()
 
@@ -50,12 +49,15 @@ def login():
     data = request.get_json()
     if not data or 'username' not in data or 'password' not in data:
         return jsonify({"msg": "username and password required"}), 400
+
     username = data.get('username')
     password = data.get('password')
     session = g.db_session()
+    
     user = session.query(User).filter_by(username=username).first()
     if not user or not check_password_hash(user.password_hash, password):
         return jsonify({"msg": "帳號或密碼錯誤"}), 401
+
     access_token = create_access_token(identity=username)
     return jsonify(access_token=access_token)
 
@@ -63,14 +65,16 @@ def login():
 def auto_auth():
     system_username = "system_auto_user"
     session = g.db_session()
+    
     with db_lock:
         user = session.query(User).filter_by(username=system_username).first()
         if not user:
             user = User(username=system_username)
-            user.set_password("auto_generated_password")
+            user.set_password("auto_generated_password")  # 考慮使用更安全的生成方法
             session.add(user)
             session.commit()
             logger.info(f"Auto-auth user '{system_username}' created")
+    
     token = create_access_token(identity=system_username)
     logger.debug(f"Auto-auth token generated for {system_username}")
     return jsonify({'access_token': token}), 200
@@ -80,11 +84,11 @@ def auto_auth():
 def userinfo():
     current_user = get_jwt_identity()
     session = g.db_session()
+    
     user = session.query(User).filter_by(username=current_user).first()
     if not user:
         return jsonify({"msg": "使用者不存在"}), 404
 
-    # 回傳必要的使用者資訊給前端
     return jsonify({
         "username": user.username,
         # 可依需求加入更多欄位，如 email、roles 等
