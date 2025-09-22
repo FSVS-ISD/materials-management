@@ -1,6 +1,9 @@
-name: Python application
+name: Python Application
 
-on: [push]
+on:
+  push:
+    branches:
+      - main  # 替換為你的主要分支名稱
 
 jobs:
   build:
@@ -21,5 +24,5 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt  # 安裝依賴
 
-    - name: Run the script
-      run: python app.py  # 替換為你的 Python 檔案
+    - name: Run the application
+      run: python app.py  # 運行主程式
