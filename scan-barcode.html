@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>出入庫管理(掃碼) - 校園物料管理系統</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31/dist/vue.global.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/axios@1.1.3/dist/axios.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <!-- 載入 Noto Sans TC 網頁字型 -->
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC&display=swap" rel="stylesheet" />
+  <style>
+    body {
+      margin: 0;
+      padding: 1rem;
+      box-sizing: border-box;
+      background-color: #f5f7fb;
+      font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif !important;
+    }
+    canvas {
+      font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif !important;
+    }
+    #app.container {
+      max-width: 720px;
+      width: 100%;
+      background: white;
+      padding: 1.5rem 2rem;
+      border-radius: 0.75rem;
+      box-shadow: 0 0.125rem 0.75rem rgba(0,0,0,0.1);
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+    h3 {
+      margin-bottom: 1.5rem;
+      color: #4a6fdc;
+      flex-shrink: 0;
+    }
+    .form-control {
+      font-size: 1.1rem;
+    }
+    .btn-primary {
+      min-width: 120px;
+    }
+    .scan-input {
+      letter-spacing: 0.15em;
+      font-weight: 600;
+      font-size: 1.25rem;
+      text-align: center;
+      padding: 0.5rem;
+      border-radius: 0.5rem;
+      border: 2px solid #4a6fdc;
+      outline-offset: 2px;
+      transition: border-color 0.3s;
+    }
+    .scan-input:focus {
+      border-color: #2a4db7;
+      box-shadow: 0 0 8px rgba(42, 77, 183, 0.5);
+    }
+    .alert {
+      margin-top: 1rem;
+      flex-shrink: 0;
+    }
+    .record-list {
+      max-height: 300px;
+      overflow-y: auto;
+      margin-top: 1rem;
+      flex-grow: 1;
+    }
+    .record-list table {
+      font-size: 0.9rem;
+      white-space: nowrap;
+    }
+    .record-list th, .record-list td {
+      vertical-align: middle;
+    }
+    .btn-clear {
+      margin-top: 1rem;
+    }
+    .form-select {
+      font-size: 1rem;
+    }
+    .loading-spinner {
+      display: inline-block;
+      width: 1.5rem;
+      height: 1.5rem;
+      vertical-align: middle;
+      border: 0.2em solid currentColor;
+      border-right-color: transparent;
+      border-radius: 50%;
+      animation: spinner 0.75s linear infinite;
+    }
+    @keyframes spinner {
+      to { transform: rotate(360deg); }
+    }
+    .barcode-container {
+      text-align: center;
+      margin-top: 1rem;
+    }
+    svg.barcodeSvg {
+      margin-top: 0.5rem;
+      height: 80px;
+      width: 320px;
+      display: block;
+    }
+    .nav-tabs .nav-link {
+      cursor: pointer;
+    }
+    .barcode-item {
+      border: 1px solid #ddd;
+      border-radius: 0.5rem;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      background: #fafafa;
+      box-shadow: 0 0.05rem 0.15rem rgba(0,0,0,0.05);
+    }
+    .barcode-item h6 {
+      margin-bottom: 0.5rem;
+      word-break: break-word;
+    }
+    .barcode-list {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .btn-group-sm > .btn {
+      min-width: 100px;
+    }
+    form {
+      max-width: 100%;
+    }
+    .record-list {
+      overflow-x: auto;
+    }
+    .btn-export-pdf {
+      margin-left: 10px;
+    }
+    .solution-info {
+      background: #f8f9ff;
+      border-left: 4px solid #4a6fdc;
+      padding: 1rem;
+      border-radius: 0 8px 8px 0;
+      margin-bottom: 1.5rem;
+    }
+    .solution-info h5 {
+      color: #2a4db7;
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .solution-info ul {
+      padding-left: 1.5rem;
+      margin-bottom: 0;
+    }
+    .solution-info li {
+      margin-bottom: 0.5rem;
+    }
+    .config-panel {
+      background: #f0f4ff;
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+    .config-panel label {
+      font-weight: 500;
+      margin-bottom: 0.5rem;
+    }
+    .config-row {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+    .config-item {
+      flex: 1;
+      min-width: 200px;
+    }
+    .feature-badge {
+      background: #4a6fdc;
+      color: white;
+      padding: 4px 8px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      margin-left: 10px;
+    }
+    .tab-content {
+      min-height: 400px;
+    }
+    /* Toast 提示訊息 */
+    .toast-container {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      z-index: 1055;
+    }
+    .toast {
+      min-width: 250px;
+      opacity: 0;
+      transition: opacity 0.3s ease-in-out;
+      pointer-events: none;
+    }
+    .toast.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+  </style>
+</head>
+<body>
+  <div id="app" class="container" role="main">
+
+    <!-- 歡迎與登出 -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <div v-if="currentUser" aria-live="polite" aria-atomic="true" style="font-weight: 600;">
+        歡迎，<span style="font-size: 1.5em; color: #ff0000;">{{ getDepartmentName(currentUser) }}
+      </div>
+      <button v-if="token" class="btn btn-outline-danger btn-sm" @click="logout" aria-label="登出">
+        登出
+      </button>
+    </div>
+
+    <h3><i class="bi bi-upc-scan me-2"></i>出入庫管理 (掃碼)</h3>
+
+    <div class="solution-info" tabindex="0" aria-label="系統功能說明" v-if="token && !authError">
+      <h5><i class="bi bi-lightbulb"></i> 系統功能說明 <span class="feature-badge">正常使用版</span></h5>
+      <p>本系統提供完整的物料管理功能，包括掃描出入庫操作和條碼生成/導出功能：</p>
+      <ul>
+        <li><strong>掃碼出入庫</strong>：掃描物料條碼進行出入庫操作</li>
+        <li><strong>條碼製作</strong>：生成物料條碼並導出為PDF</li>
+        <li><strong>PDF導出</strong>：支援中文顯示和每頁條碼數量配置<span class="feature-badge">(請先行製作並列印出,方便掃碼)</span></li>
+        <li><strong>建議事項</strong>：配合使用<span class="feature-badge">掃碼軟體/手機/條碼機</span>皆可使用</li>
+      </ul>
+    </div>
+
+    <!-- 登入表單 -->
+    <div v-if="!token || authError" class="card p-4 mb-4" role="region" aria-label="登入系統">
+      <h5 class="mb-3">請登入系統以取得操作權限</h5>
+      <form @submit.prevent="doLogin" aria-describedby="loginDesc" novalidate>
+        <div id="loginDesc" class="form-text mb-3">請輸入帳號與密碼登入</div>
+        <div class="mb-3">
+          <label for="loginUsername" class="form-label">帳號</label>
+          <input id="loginUsername" v-model="loginForm.username" type="text" class="form-control" autocomplete="username" required aria-required="true" />
+        </div>
+        <div class="mb-3">
+          <label for="loginPassword" class="form-label">密碼</label>
+          <input id="loginPassword" v-model="loginForm.password" type="password" class="form-control" autocomplete="current-password" required aria-required="true" />
+        </div>
+        <button type="submit" class="btn btn-primary" :disabled="loading" aria-live="polite" aria-busy="loading">
+          {{ loading ? '登入中...' : '登入' }}
+          <span v-if="loading" class="loading-spinner ms-2" aria-hidden="true"></span>
+        </button>
+        <div v-if="authError" class="alert alert-danger mt-3" role="alert" aria-live="assertive">{{ authError }}</div>
+      </form>
+    </div>
+
+    <!-- 授權成功後主內容 -->
+    <div v-if="token && !authError" style="flex-grow:1; display:flex; flex-direction:column;">
+      <ul class="nav nav-tabs mb-3 flex-shrink-0" role="tablist">
+        <li class="nav-item" role="presentation">
+          <a class="nav-link" :class="{active: currentPage==='barcode'}" @click.prevent="onFeatureSwitch('barcode')" role="tab" tabindex="0" :aria-selected="currentPage==='barcode'">條碼製作</a>
+        </li>
+        <li class="nav-item" role="presentation">
+          <a class="nav-link" :class="{active: currentPage==='scan'}" @click.prevent="onFeatureSwitch('scan')" role="tab" tabindex="0" :aria-selected="currentPage==='scan'">掃碼出入庫</a>
+        </li>
+      </ul>
+
+      <div class="tab-content" tabindex="0">
+        <div v-show="currentPage==='scan'" style="flex-grow:1; display:flex; flex-direction:column; overflow:hidden;" role="tabpanel" :aria-hidden="currentPage!=='scan'">
+          <form @submit.prevent="fetchMaterialByBarcode" class="mb-3 flex-shrink-0" aria-label="掃描或輸入條碼查詢表單">
+            <div class="mb-3">
+              <label for="barcodeInput" class="form-label">請掃描或輸入物料條碼</label>
+              <input id="barcodeInput" v-model="barcode" class="form-control scan-input" placeholder="掃描條碼後按 Enter" autocomplete="off" :disabled="loading" aria-required="true" />
+              <div class="form-text">掃描條碼後按Enter鍵或點擊查詢按鈕</div>
+            </div>
+            <button type="submit" class="btn btn-primary" :disabled="loading" aria-live="polite" aria-busy="loading">
+              {{ loading ? '查詢中...' : '查詢物料' }}
+              <span v-if="loading" class="loading-spinner ms-2" aria-hidden="true"></span>
+            </button>
+          </form>
+
+          <div v-if="material" class="mb-3" tabindex="0" aria-label="物料資訊">
+            <h5>物料資訊</h5>
+            <ul class="list-group">
+              <li class="list-group-item"><strong>物料編號:</strong> {{ material.item_id }}</li>
+              <li class="list-group-item"><strong>名稱:</strong> {{ material.name }}</li>
+              <li class="list-group-item"><strong>分類:</strong> {{ material.category }}</li>
+              <li class="list-group-item"><strong>當前庫存:</strong> {{ material.current_stock }} {{ material.unit }}</li>
+              <li class="list-group-item"><strong>安全庫存:</strong> {{ material.safety_stock }} {{ material.unit }}</li>
+            </ul>
+          </div>
+
+          <form v-if="material" @submit.prevent="submitRecord" class="mb-3" aria-label="出入庫操作表單">
+            <div class="row g-3 align-items-center mb-3">
+              <div class="col-auto">
+                <label for="inOutSelect" class="col-form-label">操作類型</label>
+              </div>
+              <div class="col-auto">
+                <select id="inOutSelect" v-model="recordType" class="form-select" :disabled="loading" aria-required="true">
+                  <option value="in">入庫</option>
+                  <option value="out">出庫</option>
+                </select>
+              </div>
+              <div class="col-auto">
+                <label for="quantityInput" class="col-form-label">數量</label>
+              </div>
+              <div class="col-auto" style="max-width: 120px;">
+                <input id="quantityInput" type="number" min="1" v-model.number="quantity" class="form-control" :disabled="loading" required aria-required="true" />
+              </div>
+              <div class="col-auto">
+                <button type="submit" class="btn btn-primary" :disabled="loading" aria-live="polite" aria-busy="loading">
+                  {{ loading ? '處理中...' : '確認操作' }}
+                  <span v-if="loading" class="loading-spinner ms-2" aria-hidden="true"></span>
+                </button>
+              </div>
+            </div>
+          </form>
+
+          <div v-if="message" :class="['alert', messageType === 'success' ? 'alert-success' : 'alert-danger']" role="alert" aria-live="assertive" aria-atomic="true" style="flex-shrink:0;">
+            {{ message }}
+          </div>
+
+          <div class="record-list" v-if="records.length > 0" style="flex-grow:1;" tabindex="0" aria-label="近期出入庫紀錄">
+            <div class="d-flex justify-content-between align-items-center">
+              <h5>近期出入庫紀錄</h5>
+              <button class="btn btn-outline-secondary btn-sm" @click="clearRecords" aria-label="清除紀錄">清除紀錄</button>
+            </div>
+            <table class="table table-striped table-bordered table-hover" role="grid" aria-describedby="recordListDesc">
+              <caption id="recordListDesc">最近50筆出入庫操作紀錄</caption>
+              <thead class="table-light">
+                <tr>
+                  <th scope="col">時間</th>
+                  <th scope="col">物料編號</th>
+                  <th scope="col">名稱</th>
+                  <th scope="col">操作</th>
+                  <th scope="col">數量</th>
+                  <th scope="col">操作人員</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="rec in records" :key="rec.id">
+                  <td>{{ formatDateTime(rec.timestamp) }}</td>
+                  <td>{{ rec.item_id }}</td>
+                  <td>{{ rec.name }}</td>
+                  <td>
+                    <span :class="rec.type === 'in' ? 'text-success' : 'text-danger'">
+                      {{ rec.type === 'in' ? '入庫' : '出庫' }}
+                    </span>
+                  </td>
+                  <td>{{ rec.quantity }}</td>
+                  <td>{{ rec.operator || '系統' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div v-show="currentPage==='barcode'" role="tabpanel" :aria-hidden="currentPage!=='barcode'">
+          <h5>條碼製作</h5>
+
+          <div class="config-panel" tabindex="0" aria-label="PDF匯出設定">
+            <h6><i class="bi bi-gear me-2"></i>PDF匯出設定</h6>
+            <div class="config-row">
+              <div class="config-item">
+                <label>每頁條碼數量</label>
+                <select v-model="pdfConfig.barcodesPerPage" class="form-select" aria-label="每頁條碼數量">
+                  <option value="4">4個 (2x2)</option>
+                  <option value="6">6個 (3x2)</option>
+                  <option value="9">9個 (3x3)</option>
+                  <option value="12">12個 (4x3)</option>
+                </select>
+              </div>
+              <div class="config-item">
+                <label>卡片尺寸</label>
+                <select v-model="pdfConfig.cardSize" class="form-select" aria-label="卡片尺寸">
+                  <option value="small">小型</option>
+                  <option value="medium" selected>中型</option>
+                  <option value="large">大型</option>
+                </select>
+              </div>
+              <div class="config-item">
+                <label>顯示條碼編號</label>
+                <div class="form-check form-switch mt-2">
+                  <input class="form-check-input" type="checkbox" v-model="pdfConfig.showBarcodeNumber" aria-label="顯示條碼編號" checked>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mb-3 d-flex gap-2 flex-wrap align-items-center">
+            <button class="btn btn-success" @click="generateAllBarcodes" :disabled="barcodeLoading || materials.length === 0" aria-live="polite" aria-busy="barcodeLoading">
+              {{ barcodeLoading ? '製作中...' : '一鍵全部製作' }}
+              <span v-if="barcodeLoading" class="loading-spinner ms-2" aria-hidden="true"></span>
+            </button>
+            <button class="btn btn-info btn-export-pdf" @click="exportBarcodesWithTextToPdf" :disabled="allBarcodesGenerated.length === 0 || barcodeLoading" aria-label="匯出含中文字條碼PDF">
+              <i class="bi bi-file-earmark-pdf-fill me-1"></i>匯出含中文字條碼PDF
+            </button>
+          </div>
+          
+          <div v-if="barcodeError" class="alert alert-danger" role="alert" aria-live="assertive" aria-atomic="true">{{ barcodeError }}</div>
+
+          <div v-if="allBarcodesGenerated.length > 0" class="barcode-list" tabindex="0" aria-label="全部條碼製作結果">
+            <h6>全部條碼製作結果 (共{{allBarcodesGenerated.length}}個)</h6>
+            <div v-for="item in allBarcodesGenerated" :key="item.item_id" class="barcode-item">
+              <h6>{{ item.name }} (編號: {{ item.item_id }})</h6>
+              <svg :id="'barcodeSvgAll-' + item.item_id" class="barcodeSvg" aria-label="條碼圖形"></svg>
+              <div class="mt-2"><strong>條碼編號：</strong>{{ item.barcode || '-' }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast 提示訊息 -->
+    <div class="toast-container" aria-live="polite" aria-atomic="true">
+      <div class="toast align-items-center text-bg-info border-0" role="alert" aria-live="assertive" aria-atomic="true" :class="{ show: toastVisible }" style="min-width: 250px;" ref="toast">
+        <div class="d-flex">
+          <div class="toast-body">
+            {{ toastMessage }}
+          </div>
+          <button type="button" class="btn-close btn-close-white me-2 m-auto" aria-label="關閉提示" @click="hideToast"></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const { createApp, nextTick } = Vue;
+    const { jsPDF } = window.jspdf;
+
+    createApp({
+      data() {
+        return {
+          apiBaseUrl: localStorage.getItem('apiBaseUrl') || 'https://fsvs-isd.github.io/materials-management/api',
+          token: '',
+          currentUser: '',
+          authError: '',
+          barcode: '',
+          material: null,
+          recordType: 'in',
+          quantity: 1,
+          loading: false,
+          message: '',
+          messageType: 'success',
+          records: [],
+          currentPage: 'scan',
+          barcodeLoading: false,
+          barcodeError: '',
+          materials: [],
+          allBarcodesGenerated: [],
+          resizeObserver: null,
+          pdfConfig: {
+            barcodesPerPage: '4',
+            cardSize: 'medium',
+            showBarcodeNumber: true
+          },
+          toastMessage: '',
+          toastVisible: false,
+          toastTimeoutId: null,
+          loginForm: {
+            username: '',
+            password: ''
+          },
+          loginTimestamp: null // 新增登入時間追蹤
+        };
+      },
+      async mounted() {
+        // 優先嘗試從父頁面 localStorage 取得 token (apiKey)
+        try {
+          const parentToken = window.parent?.localStorage?.getItem('apiKey') || null;
+          if (parentToken) {
+            this.token = parentToken;
+            this.currentUser = ''; // 若父頁面有用戶名稱，可自行設定
+            this.authError = '';
+            this.loginTimestamp = Date.now();
+            await this.loadMaterials();
+            this.showToast('已使用父頁面授權登入');
+            this.loadRecords();
+            this.setupResizeObserver();
+            return; // 直接使用父頁面 token，不顯示登入表單
+          }
+        } catch (e) {
+          console.warn('無法取得父頁面 token，將啟用手動登入', e);
+        }
+
+        // 若無父頁面 token，檢查本地儲存的 token 是否有效
+        const savedToken = localStorage.getItem('token');
+        const savedLoginTimestamp = localStorage.getItem('loginTimestamp');
+        const savedUsername = localStorage.getItem('username');
+
+        if (savedToken && savedLoginTimestamp) {
+          const now = Date.now();
+          if (now - parseInt(savedLoginTimestamp) < 180000) { // 3分鐘有效期
+            this.token = savedToken;
+            this.loginTimestamp = parseInt(savedLoginTimestamp);
+            this.currentUser = savedUsername || '';
+            this.authError = '';
+            try {
+              await this.loadMaterials();
+              this.showToast(`歡迎，${this.currentUser}，成功載入物料資料`);
+            } catch {}
+            this.loadRecords();
+            this.setupResizeObserver();
+            return;
+          }
+        }
+
+        // 若以上皆無，清除登入狀態，顯示登入表單
+        this.clearLoginState();
+        this.loadRecords();
+        this.setupResizeObserver();
+      },
+      beforeUnmount() {
+        if (this.resizeObserver) {
+          this.resizeObserver.disconnect();
+        }
+      },
+      watch: {
+        currentPage() {
+          this.sendHeightToParent();
+        },
+        authError(newVal) {
+          if (newVal) {
+            this.clearLoginState();
+          }
+        }
+      },
+      methods: {
+        async doLogin() {
+          if (!this.loginForm.username || !this.loginForm.password) {
+            this.authError = '請輸入帳號與密碼';
+            return;
+          }
+          this.loading = true;
+          this.authError = '';
+          try {
+            const res = await axios.post(`${this.apiBaseUrl}/login`, {
+              username: this.loginForm.username,
+              password: this.loginForm.password
+            });
+            if (res.data && res.data.access_token) {
+              this.token = res.data.access_token;
+              this.currentUser = this.loginForm.username;
+              this.loginTimestamp = Date.now();
+              localStorage.setItem('token', this.token);
+              localStorage.setItem('loginTimestamp', this.loginTimestamp.toString());
+              localStorage.setItem('username', this.currentUser);
+              this.authError = '';
+              this.loginForm.username = '';
+              this.loginForm.password = '';
+              await this.loadMaterials();
+              this.showToast(`歡迎，${this.currentUser}，登入成功`);
+              this.currentPage = 'scan';
+            } else {
+              this.authError = '登入失敗，請檢查帳號密碼';
+            }
+          } catch (e) {
+            this.authError = e.response?.data?.message || '登入失敗，請稍後再試';
+          } finally {
+            this.loading = false;
+          }
+        },
+        logout() {
+          this.clearLoginState();
+          this.authError = '已登出，請重新登入系統。';
+          this.showToast(this.authError);
+          this.material = null;
+          this.records = [];
+          this.message = '';
+          this.sendHeightToParent();
+        },
+        clearLoginState() {
+          this.token = '';
+          this.currentUser = '';
+          this.loginTimestamp = null;
+          localStorage.removeItem('token');
+          localStorage.removeItem('loginTimestamp');
+          localStorage.removeItem('username');
+        },
+        getDepartmentName(username) {
+          const departmentMap = {
+            dep1: "dep1-商經科",
+            dep2: "dep2-會事科",
+            dep3: "dep3-國貿科",
+            dep4: "dep4-觀光科",
+            dep5: "dep5-資處科",
+            dep6: "dep6-機械科",
+            dep7: "dep7-電圖科",
+            dep8: "dep8-室設科",
+            dep9: "dep9-家設科"
+          };
+          return departmentMap[username] || username; // 若無對應則顯示原用戶名
+        },
+        checkLoginStatus() {
+          if (!this.token || !this.loginTimestamp) {
+            this.logout();
+            return false;
+          }
+          const now = Date.now();
+          if (now - this.loginTimestamp >= 180000) {
+            this.logout();
+            return false;
+          }
+          return true;
+        },
+        onFeatureSwitch(featureName) {
+          if (!this.checkLoginStatus()) {
+            this.showToast('登入已過期，請重新登入');
+            return;
+          }
+          this.currentPage = featureName;
+        },
+        async loadMaterials() {
+          try {
+            const res = await axios.get(`${this.apiBaseUrl}/materials`, {
+              headers: { Authorization: `Bearer ${this.token}` }
+            });
+            this.materials = res.data || [];
+            this.authError = '';
+          } catch (e) {
+            console.error('取得物料列表失敗', e);
+            this.materials = [];
+            if (e.response && e.response.status === 401) {
+              this.authError = '授權失效，請重新登入系統獲取新的Token。';
+              this.clearLoginState();
+              this.showToast(this.authError);
+            } else {
+              this.authError = '無法連接後端服務或載入資料，請檢查API網址或網路連線。';
+              this.showToast(this.authError);
+            }
+          }
+        },
+        async fetchMaterialByBarcode() {
+          if (!this.checkLoginStatus()) return;
+          this.message = '';
+          this.material = null;
+          if (!this.barcode.trim()) {
+            this.message = '請輸入或掃描條碼';
+            this.messageType = 'error';
+            this.showToast(this.message);
+            return;
+          }
+          this.loading = true;
+          try {
+            const res = await axios.get(`${this.apiBaseUrl}/materials/barcode/${encodeURIComponent(this.barcode.trim())}`, {
+              headers: { Authorization: `Bearer ${this.token}` }
+            });
+            if (res.data) {
+              this.material = res.data;
+              this.message = '';
+              this.quantity = 1;
+            } else {
+              this.message = '找不到對應的物料資料';
+              this.messageType = 'error';
+              this.showToast(this.message);
+            }
+          } catch (error) {
+            this.message = '查詢物料失敗，請稍後再試';
+            this.messageType = 'error';
+            this.showToast(this.message);
+          } finally {
+            this.loading = false;
+            this.sendHeightToParent();
+          }
+        },
+        async submitRecord() {
+          if (!this.checkLoginStatus()) return;
+          this.message = '';
+          if (!this.material) {
+            this.message = '請先掃描並選擇物料';
+            this.messageType = 'error';
+            this.showToast(this.message);
+            return;
+          }
+          if (!this.quantity || this.quantity < 1) {
+            this.message = '數量必須大於等於1';
+            this.messageType = 'error';
+            this.showToast(this.message);
+            return;
+          }
+          this.loading = true;
+          try {
+            const payload = {
+              item_id: this.material.item_id,
+              type: this.recordType,
+              quantity: this.quantity,
+              scan_mode: true
+            };
+            const res = await axios.post(`${this.apiBaseUrl}/barcode/record`, payload, {
+              headers: { Authorization: `Bearer ${this.token}` }
+            });
+            if (res.data && res.data.success) {
+              this.message = `成功記錄${this.recordType === 'in' ? '入庫' : '出庫'} ${this.quantity} ${this.material.unit}。`;
+              this.messageType = 'success';
+              this.showToast(this.message);
+              await this.fetchMaterialByBarcode();
+              const recordQuantity = (res.data.record && typeof res.data.record.quantity === 'number') ? res.data.record.quantity : this.quantity;
+              this.addRecordToList({
+                id: Date.now(),
+                timestamp: new Date().toISOString(),
+                item_id: res.data.material.item_id,
+                name: res.data.material.name,
+                type: this.recordType,
+                quantity: recordQuantity,
+                operator: this.currentUser || '使用者'
+              });
+              this.barcode = '';
+              this.quantity = 1;
+            } else {
+              this.message = res.data.message || '操作失敗，請稍後再試';
+              this.messageType = 'error';
+              this.showToast(this.message);
+            }
+          } catch (error) {
+            console.error('submitRecord error:', error.response || error);
+            if (error.response && error.response.data && error.response.data.error) {
+              this.message = error.response.data.error;
+            } else {
+              this.message = '送出失敗，請稍後再試';
+            }
+            this.messageType = 'error';
+            this.showToast(this.message);
+          } finally {
+            this.loading = false;
+            this.sendHeightToParent();
+          }
+        },
+        addRecordToList(record) {
+          this.records.unshift(record);
+          if (this.records.length > 50) {
+            this.records.splice(50);
+          }
+          this.saveRecords();
+        },
+        saveRecords() {
+          localStorage.setItem('inBarcodeRecords', JSON.stringify(this.records));
+        },
+        loadRecords() {
+          const saved = localStorage.getItem('inBarcodeRecords');
+          if (saved) {
+            try {
+              this.records = JSON.parse(saved);
+            } catch {
+              this.records = [];
+            }
+          }
+        },
+        clearRecords() {
+          if (confirm('確定要清除所有出入庫紀錄嗎？')) {
+            this.records = [];
+            this.saveRecords();
+            this.showToast('已清除所有出入庫紀錄');
+          }
+        },
+        formatDateTime(dateStr) {
+          const d = new Date(dateStr);
+          if (isNaN(d)) return dateStr;
+          return d.toLocaleString('zh-TW', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+          });
+        },
+        showToast(message, duration = 3000) {
+          if (this.toastTimeoutId) {
+            clearTimeout(this.toastTimeoutId);
+            this.toastTimeoutId = null;
+          }
+          this.toastMessage = message;
+          this.toastVisible = true;
+          this.toastTimeoutId = setTimeout(() => {
+            this.toastVisible = false;
+            this.toastTimeoutId = null;
+          }, duration);
+        },
+        hideToast() {
+          if (this.toastTimeoutId) {
+            clearTimeout(this.toastTimeoutId);
+            this.toastTimeoutId = null;
+          }
+          this.toastVisible = false;
+        },
+        sendHeightToParent() {
+          nextTick(() => {
+            if (this.$el) {
+              const height = this.$el.scrollHeight || this.$el.offsetHeight || document.documentElement.scrollHeight;
+              parent.postMessage({ type: 'adjustHeight', height }, '*');
+            }
+          });
+        },
+        setupResizeObserver() {
+          if ('ResizeObserver' in window) {
+            this.resizeObserver = new ResizeObserver(() => {
+              this.sendHeightToParent();
+            });
+            if (this.$el) {
+              this.resizeObserver.observe(this.$el);
+            }
+          }
+          this.sendHeightToParent();
+        },
+        async generateAllBarcodes() {
+          if (!this.checkLoginStatus()) return;
+          try {
+            this.barcodeError = '';
+            this.allBarcodesGenerated = [];
+            if (this.materials.length === 0) {
+              this.barcodeError = '無物料資料可製作條碼';
+              this.showToast(this.barcodeError);
+              return;
+            }
+            this.barcodeLoading = true;
+            await nextTick();
+            this.allBarcodesGenerated = [...this.materials];
+            await nextTick();
+            this.allBarcodesGenerated.forEach(item => {
+              const svgId = 'barcodeSvgAll-' + item.item_id;
+              const svgElement = document.getElementById(svgId);
+              if (svgElement) svgElement.innerHTML = '';
+            });
+            for (const item of this.allBarcodesGenerated) {
+              const svgId = 'barcodeSvgAll-' + item.item_id;
+              const svgElement = document.getElementById(svgId);
+              if (!svgElement) {
+                console.error(`SVG element ${svgId} not found for item ${item.item_id}. Skipping barcode generation.`);
+                continue;
+              }
+              if (!item.barcode) {
+                console.warn(`物料編號 ${item.item_id} 缺少條碼資料，跳過製作條碼圖形。`);
+                continue;
+              }
+              try {
+                svgElement.innerHTML = '';
+                JsBarcode(`#${svgId}`, item.barcode, {
+                  format: "code128",
+                  lineColor: "#4a6fdc",
+                  width: 2,
+                  height: 80,
+                  displayValue: true,
+                  fontSize: 16,
+                  font: "monospace",
+                  margin: 10
+                });
+                await nextTick();
+                await new Promise(resolve => setTimeout(resolve, 50));
+              } catch (innerError) {
+                console.error(`Error processing barcode for item ${item.item_id}:`, innerError);
+              }
+            }
+            this.barcodeError = '';
+            this.showToast('全部條碼製作完成');
+          } catch (e) {
+            console.error('generateAllBarcodes error:', e);
+            this.barcodeError = '一鍵全部製作過程中發生未知錯誤，請稍後再試。';
+            this.showToast(this.barcodeError);
+          } finally {
+            this.barcodeLoading = false;
+            this.sendHeightToParent();
+          }
+        },
+
+        // 載入中文字型到 jsPDF
+        async loadFontToJsPDF(doc) {
+          try {
+            // 加入 Authorization Header，帶入 token
+            const res = await axios.get(`${this.apiBaseUrl}/font/noto_sans_tc`, {
+              headers: { Authorization: `Bearer ${this.token}` }
+            });
+            const fontBase64 = res.data.fontBase64;
+            if (!fontBase64) throw new Error('無法取得字型資料');
+
+            doc.addFileToVFS('NotoSansTC-Regular.ttf', fontBase64);
+            doc.addFont('NotoSansTC-Regular.ttf', 'NotoSansTC', 'normal');
+            doc.setFont('NotoSansTC');
+          } catch (e) {
+            console.error('載入字型失敗:', e);
+            alert('載入中文字型失敗，PDF 可能無法顯示中文');
+          }
+        },
+
+        // 匯出條碼含中文字PDF
+        async exportBarcodesWithTextToPdf() {
+          if (!this.checkLoginStatus()) return;
+          if (this.allBarcodesGenerated.length === 0) {
+            this.showToast('沒有可匯出的條碼。請先製作條碼。');
+            return;
+          }
+          const doc = new jsPDF({
+            unit: 'pt',
+            format: 'a4',
+            orientation: 'portrait'
+          });
+
+          // 載入中文字型
+          await this.loadFontToJsPDF(doc);
+
+          const margin = 40;
+          const pageWidth = doc.internal.pageSize.getWidth();
+          const pageHeight = doc.internal.pageSize.getHeight();
+          const barcodesPerPage = parseInt(this.pdfConfig.barcodesPerPage);
+          let rows, cols;
+          switch(barcodesPerPage) {
+            case 4: rows = 2; cols = 2; break;
+            case 6: rows = 3; cols = 2; break;
+            case 9: rows = 3; cols = 3; break;
+            case 12: rows = 4; cols = 3; break;
+            default: rows = 2; cols = 2;
+          }
+          let cardWidth, cardHeight;
+          switch(this.pdfConfig.cardSize) {
+            case 'small': 
+              cardWidth = (pageWidth - 2 * margin - (cols - 1) * 20) / cols;
+              cardHeight = 200; 
+              break;
+            case 'large': 
+              cardWidth = (pageWidth - 2 * margin - (cols - 1) * 30) / cols;
+              cardHeight = 280; 
+              break;
+            case 'medium':
+            default:
+              cardWidth = (pageWidth - 2 * margin - (cols - 1) * 25) / cols;
+              cardHeight = 240;
+              break;
+          }
+
+          const totalPages = Math.ceil(this.allBarcodesGenerated.length / barcodesPerPage);
+
+          for (let page = 0; page < totalPages; page++) {
+            if (page > 0) doc.addPage();
+
+            for (let i = 0; i < barcodesPerPage; i++) {
+              const index = page * barcodesPerPage + i;
+              if (index >= this.allBarcodesGenerated.length) break;
+
+              const item = this.allBarcodesGenerated[index];
+              const col = i % cols;
+              const row = Math.floor(i / cols);
+              const x = margin + col * (cardWidth + 20);
+              const y = margin + row * (cardHeight + 20);
+
+              // 卡片邊框
+              doc.setDrawColor(74, 111, 220);
+              doc.setLineWidth(1);
+              doc.roundedRect(x, y, cardWidth, cardHeight, 8, 8, 'S');
+
+              // 物料名稱（使用註冊中文字型）
+              doc.setFont("NotoSansTC");
+              doc.setFontSize(14);
+              doc.setTextColor(0, 0, 0);
+              doc.text(item.name || '', x + 10, y + 25, { maxWidth: cardWidth - 20 });
+
+              // 物料編號
+              doc.setFontSize(12);
+              doc.setTextColor(100);
+              doc.text(`編號: ${item.item_id || ''}`, x + 10, y + 45);
+
+              // 條碼圖片
+              if (item.barcode) {
+                try {
+                  const canvas = document.createElement('canvas');
+                  JsBarcode(canvas, item.barcode, {
+                    format: "code128",
+                    lineColor: "#4a6fdc",
+                    width: 2,
+                    height: 60,
+                    displayValue: false,
+                    margin: 0
+                  });
+                  const imgData = canvas.toDataURL('image/png');
+                  const imgX = x + 10;
+                  const imgY = y + 60;
+                  const imgWidth = cardWidth - 20;
+                  const imgHeight = 60;
+                  doc.addImage(imgData, 'PNG', imgX, imgY, imgWidth, imgHeight);
+                } catch (err) {
+                  console.error('條碼圖片生成失敗:', err);
+                }
+              }
+
+              // 顯示條碼編號文字
+              if (this.pdfConfig.showBarcodeNumber && item.barcode) {
+                doc.setFontSize(10);
+                doc.setTextColor(50);
+                doc.text(item.barcode, x + 10, y + 130);
+              }
+            }
+          }
+
+          doc.save('條碼匯出.pdf');
+          this.showToast('匯出PDF完成');
+      },
+
+    }
+  }).mount('#app');
+</script>
+</body>
+</html>
