@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>校園物料管理系統</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios@1.1.3/dist/axios.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #4a6fdc;
+            --secondary-color: #6c757d;
+            --success-color: #28a745;
+            --warning-color: #ffc107;
+            --danger-color: #dc3545;
+            --light-bg: #f8f9fa;
+        }
+        body {
+            background-color: #f5f7fb;
+            font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+        }
+        .navbar-brand { font-weight: 600; letter-spacing: 0.5px; }
+        .list-group-item.active { background-color: var(--primary-color); border-color: var(--primary-color); }
+        .card { border-radius: 0.75rem; box-shadow: 0 0.125rem 0.75rem rgba(0, 0, 0, 0.08); border: none; margin-bottom: 1.5rem; }
+        .stat-card { border-radius: 0.75rem; transition: transform 0.3s; height: 100%; }
+        .stat-card:hover { transform: translateY(-5px); }
+        .low-stock { color: var(--danger-color); font-weight: 600; }
+        .api-status { position: fixed; bottom: 20px; right: 20px; z-index: 1050; border-radius: 0.75rem; }
+        #loginPage { height: 100vh; display: flex; justify-content: center; align-items: center; flex-direction: column; }
+        #loginCard { width: 360px; padding: 2rem; border-radius: 1rem; box-shadow: 0 0.25rem 1rem rgba(0,0,0,0.1); background: white; margin-bottom: 1rem; }
+        .login-cards { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 1.5rem; }
+        .login-card { padding: 1rem; border-radius: 0.75rem; box-shadow: 0 0.125rem 0.5rem rgba(0,0,0,0.08); background: #fff; cursor: pointer; text-align: center; transition: transform 0.2s; }
+        .login-card:hover { transform: scale(1.05); background: #f0f4ff; }
+        #iframeContainer { width: 100%; border: 1px solid #ddd; border-radius: 0.5rem; overflow: hidden; background: white; box-shadow: 0 0.125rem 0.75rem rgba(0, 0, 0, 0.08); min-height: 400px; transition: height 0.3s ease; }
+        iframe { width: 100%; border: none; display: block; min-height: 400px; transition: height 0.3s ease; }
+    </style>
+</head>
+<body>
+<div id="app">
+    <!-- 登入頁面 -->
+    <div v-if="!isAuthenticated" id="loginPage">
+        <div class="login-cards">
+            <div v-for="card in quickLoginCards" :key="card.username" class="login-card" @click="quickLogin(card)">
+                <i class="bi bi-person-circle fs-3 text-primary"></i>
+                <h6 class="mt-2">{{ card.label }}</h6>
+                <small>{{ card.username }}</small>
+            </div>
+        </div>
+        <div id="loginCard">
+            <h3 class="text-center mb-3">{{ isRegisterMode ? '註冊帳號' : '使用者登入' }}</h3>
+            <form @submit.prevent="isRegisterMode ? register() : login()">
+                <div class="mb-3"><input v-model="authForm.username" type="text" class="form-control" placeholder="帳號" required /></div>
+                <div class="mb-3"><input v-model="authForm.password" type="password" class="form-control" placeholder="密碼" required /></div>
+                <div class="d-grid mb-2"><button type="submit" class="btn btn-primary" :disabled="authLoading">{{ authLoading ? (isRegisterMode ? '註冊中...' : '登入中...') : (isRegisterMode ? '註冊' : '登入') }}</button></div>
+            </form>
+            <div class="text-center mb-3"><a href="#" @click.prevent="toggleAuthMode">{{ isRegisterMode ? '已有帳號？點此登入' : '沒有帳號？點此註冊' }}</a></div>
+            <div v-if="authError" class="alert alert-danger mt-3">{{ authError }}</div>
+            <div v-if="authSuccess" class="alert alert-success mt-3">{{ authSuccess }}</div>
+        </div>
+    </div>
+
+    <!-- 主系統頁面 -->
+    <div v-else class="container-fluid">
+        <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+            <div class="container">
+                <a class="navbar-brand d-flex align-items-center" href="#"><i class="bi bi-boxes-fill text-white fs-4 me-2"></i> 校園物料管理系統 v3.0</a>
+                <div class="d-flex align-items-center">
+                    <span class="badge bg-light text-primary me-3">最後更新: {{ lastUpdated }}</span>
+                    <div class="d-flex align-items-center text-white me-3"><i class="bi bi-person-circle me-2"></i><span>{{ authForm.username }}</span></div>
+                    <button class="btn btn-outline-light btn-sm" @click="logout"><i class="bi bi-box-arrow-right"></i> 登出</button>
+                </div>
+            </div>
+        </nav>
+
+        <div class="row mt-4">
+            <div class="col-md-3">
+                <div class="list-group">
+                    <a href="#" class="list-group-item list-group-item-action" :class="{ active: sideMenuView==='dashboard'}" @click.prevent="switchSideMenu('dashboard')"><i class="bi bi-speedometer2 me-2"></i> 儀表板</a>
+                    <a href="#" class="list-group-item list-group-item-action" :class="{ active: sideMenuView==='materials'}" @click.prevent="switchSideMenu('materials')"><i class="bi bi-box-seam me-2"></i> 物料管理</a>
+                    <a href="#" class="list-group-item list-group-item-action" :class="{ active: sideMenuView==='in-records'}" @click.prevent="switchSideMenu('in-records')"><i class="bi bi-box-arrow-in-down-right me-2"></i> 出入庫管理(手動)</a>
+                    <a href="#" class="list-group-item list-group-item-action" :class="{ active: sideMenuView==='in-barcode'}" @click.prevent="switchSideMenu('in-barcode')"><i class="bi bi-upc-scan me-2"></i> 出入庫管理(掃碼)</a>
+                    <a href="#" class="list-group-item list-group-item-action" :class="{ active: sideMenuView==='inventory'}" @click.prevent="switchSideMenu('inventory')"><i class="bi bi-clipboard-check me-2"></i> 庫存管理</a>
+                    <a href="#" class="list-group-item list-group-item-action" :class="{ active: sideMenuView==='reports'}" @click.prevent="switchSideMenu('reports')"><i class="bi bi-file-earmark-bar-graph me-2"></i> 報表中心</a>
+                    <a href="#" class="list-group-item list-group-item-action" :class="{ active: sideMenuView==='settings'}" @click.prevent="switchSideMenu('settings')"><i class="bi bi-gear me-2"></i> 系統設定</a>
+                </div>
+            </div>
+
+            <div class="col-md-9">
+                <div v-if="sideMenuView==='dashboard'" id="iframeContainer"><iframe src="dashboard.html" ref="dashboardIframe"></iframe></div>
+                <div v-if="sideMenuView==='materials'" id="iframeContainer"><iframe src="material-management.html" ref="materialIframe"></iframe></div>
+                <div v-if="sideMenuView==='in-records'" id="iframeContainer"><iframe src="Inbound and outbound.html" ref="inOutIframe"></iframe></div>
+                <div v-if="sideMenuView==='in-barcode'" id="iframeContainer"><iframe src="scan-barcode.html" ref="inBarcodeIframe"></iframe></div>
+                <div v-if="sideMenuView==='inventory'" id="iframeContainer"><iframe src="Inventory summary.html" ref="inventoryIframe"></iframe></div>
+                <div v-if="sideMenuView==='reports'" id="iframeContainer"><iframe src="report-center.html" ref="reportsIframe"></iframe></div>
+                <div v-if="sideMenuView==='settings'">
+                    <h4>API 設定</h4>
+                    <div class="mb-3"><label for="apiBaseUrlInput" class="form-label">API 網址</label><input type="text" id="apiBaseUrlInput" v-model="apiBaseUrl" class="form-control" /></div>
+                    <div class="mb-3"><label for="apiKeyInput" class="form-label">API 密鑰</label><textarea id="apiKeyInput" v-model="apiKeyInput" class="form-control" rows="3"></textarea></div>
+                    <button class="btn btn-primary" @click="saveApiSettings">儲存設定</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="api-status"><div class="alert" :class="apiStatusClass" role="alert"><span v-if="apiConnected"><i class="bi bi-check-circle-fill me-1"></i> 後端已連接</span><span v-else><i class="bi bi-exclamation-triangle-fill me-1"></i> 後端未連接</span></div></div>
+</div>
+
+<script>
+const { createApp } = Vue;
+createApp({
+    data(){return{
+        isAuthenticated:false,authLoading:false,authError:'',authSuccess:'',authForm:{username:'',password:''},isRegisterMode:false,
+        sideMenuView:'dashboard',apiBaseUrl:localStorage.getItem('apiBaseUrl')||'http://10.10.7.66:5000/api',apiKey:localStorage.getItem('apiKey')||'',apiKeyInput:localStorage.getItem('apiKey')||'',apiConnected:false,lastUpdated:this.getCurrentDateTime(),
+        quickLoginCards:[{label:'商經科',username:'dep1',password:'pass1'},{label:'會事科',username:'dep2',password:'pass2'},{label:'國貿科',username:'dep3',password:'pass3'},{label:'觀光科',username:'dep4',password:'pass4'},{label:'資處科',username:'dep5',password:'pass5'},{label:'機械科',username:'dep6',password:'pass6'},{label:'電圖科',username:'dep7',password:'pass7'},{label:'室設科',username:'dep8',password:'pass8'},{label:'家設科',username:'dep9',password:'pass9'}]
+    }},
+    computed:{apiStatusClass(){return this.apiConnected?'alert-success':'alert-danger';}},
+    mounted(){const savedUsername=localStorage.getItem('username');if(savedUsername&&this.apiKey){this.authForm.username=savedUsername;this.isAuthenticated=true;this.apiKeyInput=this.apiKey;this.checkApiConnection();}},
+    methods:{
+        getCurrentDateTime(){const now=new Date();return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;},
+        toggleAuthMode(){this.isRegisterMode=!this.isRegisterMode;this.authError='';this.authSuccess='';this.authForm.password='';},
+        async login(){this.authError='';this.authSuccess='';if(!this.authForm.username||!this.authForm.password){this.authError='請輸入帳號與密碼';return;}this.authLoading=true;try{const res=await axios.post(`${this.apiBaseUrl.replace(/\/$/,'')}/login`,{username:this.authForm.username,password:this.authForm.password});if(res.data&&res.data.access_token){this.apiKeyInput=res.data.access_token;this.apiKey=res.data.access_token;this.isAuthenticated=true;this.lastUpdated=this.getCurrentDateTime();localStorage.setItem('username',this.authForm.username);localStorage.setItem('apiKey',res.data.access_token);}else{this.authError='登入失敗';}}catch(err){this.authError='登入失敗，請確認帳號或密碼';}finally{this.authLoading=false;}},
+        async register(){/* 保留原有註冊流程 */},
+        logout(){this.isAuthenticated=false;this.authForm.username='';this.authForm.password='';this.apiKey='';this.apiKeyInput='';this.sideMenuView='dashboard';this.apiConnected=false;localStorage.clear();},
+        switchSideMenu(v){this.sideMenuView=v;},
+        saveApiSettings(){if(!this.apiBaseUrl||!this.apiKeyInput){alert('請輸入 API 設定');return;}this.apiBaseUrl=this.apiBaseUrl.trim();this.apiKey=this.apiKeyInput.trim();localStorage.setItem('apiBaseUrl',this.apiBaseUrl);localStorage.setItem('apiKey',this.apiKey);alert('API 設定已儲存');this.checkApiConnection();},
+        async checkApiConnection(){if(!this.apiKey){this.apiConnected=false;return;}try{const res=await axios.get(`${this.apiBaseUrl.replace(/\/$/,'')}/materials`,{headers:{Authorization:`Bearer ${this.apiKey}`}});this.apiConnected=Array.isArray(res.data);}catch{this.apiConnected=false;}},
+        quickLogin(card){this.authForm.username=card.username;this.authForm.password=card.password;this.login();}
+    }
+}).mount('#app');
+</script>
+</body>
+</html>
