@@ -63,4 +63,5 @@ class LoginStateService:
                     return True
             return False
 
+# 實例化登入狀態服務
 login_service = LoginStateService()

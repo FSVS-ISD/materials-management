@@ -17,6 +17,10 @@ DATABASE_URL = f"sqlite:///{default_db_path}"
 def get_session(db_url=None):
     if db_url is None:
         db_url = DATABASE_URL
-    engine = create_engine(db_url, echo=False, future=True)
-    Session = sessionmaker(bind=engine)
-    return Session
+    try:
+        engine = create_engine(db_url, echo=False, future=True)
+        Session = sessionmaker(bind=engine)
+        return Session()
+    except Exception as e:
+        raise RuntimeError(f"無法建立資料庫連線: {e}")
+

@@ -82,8 +82,12 @@ def get_db_uri_for_user(username: str) -> str:
 # --- 創建資料表的函數 ---
 def create_tables_if_not_exist(database_uri):
     engine = create_engine(database_uri)
-    Base.metadata.create_all(engine)  # 創建所有資料表
-    logger.info("資料表已成功創建或已存在。")
+    try:
+        Base.metadata.create_all(engine)  # 創建所有資料表
+        logger.info("資料表已成功創建或已存在。")
+    except SQLAlchemyError as e:
+        logger.error(f"資料表創建失敗: {e}")
+        raise
 
 # --- 健康檢查 API ---
 @app.route('/api/health', methods=['GET'], strict_slashes=False)
@@ -91,24 +95,21 @@ def health_check():
     return jsonify({'status': 'ok', 'version': '1.0.0'})
 
 # --- 登入 API ---
-@user_bp.route('/login', methods=['POST'])
+@user_bp.route('/login', methods=['POST'], endpoint='user_login')
 def login():
-    # 獲取請求的 JSON 數據
     data = request.get_json()
     username = data.get('username')
     password = data.get('password')
 
-    # 驗證用戶名和密碼
     if not username or not password:
         return jsonify({"msg": "用戶名和密碼為必填項"}), 400
 
-    # 假設使用 SQLAlchemy 查詢用戶
     session = sessionmaker(bind=create_engine(app.config['SQLALCHEMY_DATABASE_URI']))()
     try:
         user = session.query(User).filter_by(username=username).first()
-        
-        if user and user.verify_password(password):  # 假設 User 模型有 verify_password 方法
-            # 創建 JWT
+        logger.debug(f"查詢用戶: {username}, 查詢結果: {user}")
+
+        if user and user.verify_password(password):
             access_token = create_access_token(identity=username)
             return jsonify(access_token=access_token), 200
         else:
@@ -119,19 +120,6 @@ def login():
     finally:
         session.close()
 
-# --- 主程式啟動 ---
-if __name__ == '__main__':
-    with db_uri_lock:
-        # 確保資料表存在
-        try:
-            create_tables_if_not_exist(app.config['SQLALCHEMY_DATABASE_URI'])
-            checked_dbs.add(app.config['SQLALCHEMY_DATABASE_URI'])
-        except SQLAlchemyError as e:
-            logger.error(f"資料表創建失敗: {e}")
-            exit(1)
-
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)  # 使用環境變數設定埠號
-
 # --- 註冊藍圖 ---
 app.register_blueprint(user_bp)
 app.register_blueprint(material_bp)
@@ -140,3 +128,15 @@ app.register_blueprint(record_bp)
 app.register_blueprint(report_bp)
 app.register_blueprint(backup_bp)
 app.register_blueprint(font_bp)
+
+# --- 主程式啟動 ---
+if __name__ == '__main__':
+    with db_uri_lock:
+        try:
+            create_tables_if_not_exist(app.config['SQLALCHEMY_DATABASE_URI'])
+            checked_dbs.add(app.config['SQLALCHEMY_DATABASE_URI'])
+        except SQLAlchemyError as e:
+            logger.error(f"資料表創建失敗: {e}")
+            exit(1)
+
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
