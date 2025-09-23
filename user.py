@@ -1,5 +1,4 @@
-from flask import request, jsonify, g, current_app
-from flask import Blueprint
+from flask import request, jsonify, g, Blueprint
 from flask_jwt_extended import (
     create_access_token,
     jwt_required,
@@ -27,9 +26,11 @@ def register():
 
     with db_lock:
         try:
+            # 檢查用戶名是否存在
             if session.query(User).filter_by(username=data['username']).first():
                 return jsonify({'error': 'Username exists'}), 409
 
+            # 創建新用戶
             user = User(username=data['username'])
             user.set_password(data['password'])
 
@@ -54,10 +55,12 @@ def login():
     password = data.get('password')
     session = g.db_session()
     
+    # 查詢用戶
     user = session.query(User).filter_by(username=username).first()
     if not user or not check_password_hash(user.password_hash, password):
         return jsonify({"msg": "帳號或密碼錯誤"}), 401
 
+    # 創建 JWT
     access_token = create_access_token(identity=username)
     return jsonify(access_token=access_token)
 
@@ -67,6 +70,7 @@ def auto_auth():
     session = g.db_session()
     
     with db_lock:
+        # 檢查自動認證用戶是否存在
         user = session.query(User).filter_by(username=system_username).first()
         if not user:
             user = User(username=system_username)
@@ -75,6 +79,7 @@ def auto_auth():
             session.commit()
             logger.info(f"Auto-auth user '{system_username}' created")
     
+    # 創建 JWT
     token = create_access_token(identity=system_username)
     logger.debug(f"Auto-auth token generated for {system_username}")
     return jsonify({'access_token': token}), 200
@@ -85,6 +90,7 @@ def userinfo():
     current_user = get_jwt_identity()
     session = g.db_session()
     
+    # 查詢當前用戶信息
     user = session.query(User).filter_by(username=current_user).first()
     if not user:
         return jsonify({"msg": "使用者不存在"}), 404
